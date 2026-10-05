@@ -1,0 +1,24 @@
+{
+  "calendar_url": "https://outlook.office365.com/REPLACE_WITH_YOUR_PRIVATE_ICS_LINK/calendar.ics",
+  "calendar_file": null,
+  "calendar_id": "outlook-work",
+  "poll_seconds": 3600,
+  "lookback_days": 7,
+  "server_url": "http://127.0.0.1:5600",
+  "default_timezone": "Europe/Prague",
+  "timezone_aliases": {
+    "Central Europe Standard Time": "Europe/Prague",
+    "Central European Standard Time": "Europe/Warsaw",
+    "W. Europe Standard Time": "Europe/Berlin",
+    "Romance Standard Time": "Europe/Paris",
+    "GMT Standard Time": "Europe/London",
+    "UTC": "UTC",
+    "China Standard Time": "Asia/Shanghai",
+    "Eastern Standard Time": "America/New_York",
+    "GTB Standard Time": "Europe/Bucharest",
+    "Sri Lanka Standard Time": "Asia/Colombo"
+  },
+  "include_attendees": false,
+  "excluded_busy_statuses": ["OOF"],
+  "reconcile": true
+}
