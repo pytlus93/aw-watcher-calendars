@@ -1,5 +1,6 @@
 //! Host-independent calendar parsing and append-only import planning.
 pub mod adapter;
+pub mod config;
 use chrono::{DateTime, Days, Duration, NaiveDate, NaiveDateTime, TimeZone, Utc};
 use chrono_tz::Tz;
 use ical::{parser::ical::component::IcalEvent, property::Property};

@@ -1,4 +1,4 @@
-use aw_calendar_sync::{adapter::synchronize, Config, Result};
+use aw_calendar_sync::{adapter::synchronize_all, config::CalendarSet, Result};
 use chrono::Utc;
 use fs2::FileExt;
 use std::{
@@ -15,6 +15,7 @@ Default: stay running, import completed events from the last 7 days every 60 min
 --once         Run one import and exit (nonzero on failure).\n\
 --dry-run      Download/parse/count eligible events, without connecting to AW.\n\
 --init-config  Create a template if absent, print its path, and exit.\n\
+--validate-config Check configuration without fetching calendars or connecting to AW.\n\
 --testing      Use port 5666 and a separate default config.\n\
 Reconciliation replaces changed events and deletes excluded/missing events inside the window. Older history is preserved.";
 
@@ -52,15 +53,7 @@ fn init_config(path: &Path, testing: bool) -> Result<()> {
     if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
         fs::create_dir_all(parent).map_err(|_| "cannot create config directory")?;
     }
-    let mut config = Config {
-        calendar_url: Some(
-            "https://outlook.office365.com/REPLACE_WITH_YOUR_PRIVATE_ICS_LINK/calendar.ics".into(),
-        ),
-        ..Config::default()
-    };
-    if testing {
-        config.server_url = "http://127.0.0.1:5666".into();
-    }
+    let config = CalendarSet::template(testing);
     match OpenOptions::new().write(true).create_new(true).open(path) {
         Ok(mut f) => f
             .write_all(serde_json::to_string_pretty(&config).unwrap().as_bytes())
@@ -70,38 +63,27 @@ fn init_config(path: &Path, testing: bool) -> Result<()> {
     }
     Ok(())
 }
-fn read_config(path: &Path, testing: bool) -> Result<Config> {
+fn read_config(path: &Path, testing: bool) -> Result<CalendarSet> {
     let text = fs::read_to_string(path).map_err(|_| "cannot read config file")?;
-    // Serde errors can contain the private URL; report location only.
-    let mut c: Config = serde_json::from_str(&text).map_err(|e| {
-        format!(
-            "invalid config JSON at line {}, column {}",
-            e.line(),
-            e.column()
-        )
-    })?;
-    if testing {
-        c.server_url = "http://127.0.0.1:5666".into();
-    }
-    if c.calendar_url
-        .as_ref()
-        .is_some_and(|u| u.contains("REPLACE_WITH_YOUR_PRIVATE_ICS_LINK"))
-    {
-        return Err("paste your Outlook ICS URL into calendar_url in the config file".into());
-    }
-    if let Some(file) = &mut c.calendar_file {
-        let p = PathBuf::from(&*file);
-        if p.is_relative() {
-            *file = path
-                .parent()
-                .unwrap_or(Path::new("."))
-                .join(p)
-                .to_string_lossy()
-                .into();
+    let mut settings = CalendarSet::from_json(&text)?;
+    for c in &mut settings.calendars {
+        if testing {
+            c.server_url = "http://127.0.0.1:5666".into();
         }
+        if let Some(file) = &mut c.calendar_file {
+            let p = PathBuf::from(&*file);
+            if p.is_relative() {
+                *file = path
+                    .parent()
+                    .unwrap_or(Path::new("."))
+                    .join(p)
+                    .to_string_lossy()
+                    .into();
+            }
+        }
+        c.validate()?;
     }
-    c.validate()?;
-    Ok(c)
+    Ok(settings)
 }
 fn log(path: &Path, message: &str) {
     let line = format!("{} {}\n", Utc::now().to_rfc3339(), message);
@@ -121,6 +103,7 @@ fn run() -> Result<()> {
     let mut once = false;
     let mut dry = false;
     let mut init = false;
+    let mut validate = false;
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--help" | "-h" => {
@@ -139,6 +122,7 @@ fn run() -> Result<()> {
                 once = true;
             }
             "--init-config" => init = true,
+            "--validate-config" => validate = true,
             _ => return Err("unknown argument; use --help".into()),
         }
     }
@@ -147,6 +131,14 @@ fn run() -> Result<()> {
     init_config(&path, testing)?;
     if init {
         println!("{}", path.display());
+        return Ok(());
+    }
+    if validate {
+        let settings = read_config(&path, testing)?;
+        println!(
+            "Configuration valid; {} calendars enabled",
+            settings.calendars.len()
+        );
         return Ok(());
     }
     let logpath = if custom_config {
@@ -181,12 +173,19 @@ fn run() -> Result<()> {
     loop {
         let config = read_config(&path, testing);
         let wait = config.as_ref().map(|c| c.poll_seconds).unwrap_or(60);
-        let outcome = config.and_then(|c| synchronize(&c, c.window(Utc::now())?, dry));
-        match outcome {
-            Ok(r) => log(
-                &logpath,
-                &format!(
-                    "{}eligible={} inserted={} unchanged={} changed={} deleted={}",
+        let mut failed = false;
+        match config {
+            Ok(settings) => {
+                if settings.calendars.is_empty() {
+                    log(&logpath, "no calendars enabled; retained buckets untouched");
+                }
+                for outcome in synchronize_all(&settings.calendars, Utc::now(), dry) {
+                    match outcome.result {
+                        Ok(r) => log(
+                            &logpath,
+                            &format!(
+                    "calendar={} {}eligible={} inserted={} unchanged={} changed={} deleted={}",
+                    outcome.calendar_id,
                     if dry { "dry-run " } else { "" },
                     r.eligible,
                     r.inserted,
@@ -194,15 +193,23 @@ fn run() -> Result<()> {
                     r.changed,
                     r.deleted
                 ),
-            ),
+                        ),
+                        Err(e) => {
+                            log(&logpath, &format!("calendar={} {e}", outcome.calendar_id));
+                            failed = true;
+                        }
+                    }
+                }
+            }
             Err(e) => {
                 log(&logpath, &e);
-                if once {
-                    return Err("import failed; see log".into());
-                }
+                failed = true;
             }
         }
         if once {
+            if failed {
+                return Err("one or more calendar imports failed; see log".into());
+            }
             break;
         }
         thread::sleep(Duration::from_secs(wait));

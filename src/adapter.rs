@@ -45,6 +45,9 @@ pub fn load_feed(config: &Config) -> Result<String> {
         .calendar_url
         .as_ref()
         .ok_or("no calendar source configured")?;
+    if url.contains("REPLACE_WITH_YOUR_PRIVATE_ICS_LINK") {
+        return Err("paste this calendar's Outlook ICS URL into its calendar_url setting".into());
+    }
     let agent = ureq::AgentBuilder::new()
         .timeout(Duration::from_secs(45))
         .redirects(0)
@@ -188,6 +191,24 @@ pub struct Report {
     pub unchanged: usize,
     pub changed: usize,
     pub deleted: usize,
+}
+
+pub struct CalendarOutcome {
+    pub calendar_id: String,
+    pub result: Result<Report>,
+}
+/// Each source owns its own bucket. Failures never reconcile another source.
+pub fn synchronize_all(
+    configs: &[Config],
+    now: chrono::DateTime<Utc>,
+    dry_run: bool,
+) -> impl Iterator<Item = CalendarOutcome> + '_ {
+    configs.iter().map(move |config| CalendarOutcome {
+        calendar_id: config.calendar_id.clone(),
+        result: config
+            .window(now)
+            .and_then(|window| synchronize(config, window, dry_run)),
+    })
 }
 pub fn synchronize(config: &Config, window: Window, dry_run: bool) -> Result<Report> {
     config.validate()?;

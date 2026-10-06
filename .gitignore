@@ -3,3 +3,4 @@
 /local/
 *.log
 config.json
+__pycache__/

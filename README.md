@@ -1,7 +1,7 @@
 # aw-calendar-sync
 
 A Rust iCalendar importer launched by ActivityWatch's tray **Modules** menu.
-It reads a published Outlook HTTPS ICS URL (or a local ICS file), checks once
+It reads one or more published Outlook HTTPS ICS URLs (or local ICS files), checks once
 at startup and then every **60 minutes**, and imports **only completed events
 that started in the last seven days**. This bounded catch-up window covers
 overnight gaps and short outages; unchanged meetings are skipped.
@@ -62,7 +62,8 @@ preserving the existing modules. It backs up an existing tray config to
 the tray configuration.
 
 Open the config path printed by the installer and replace `calendar_url`
-with your private, direct Outlook HTTPS ICS link. Keep `calendar_file` null.
+in the first `calendars` entry with your private, direct Outlook HTTPS ICS link.
+Leave `calendar_file` absent or null for URL sources.
 Do not commit the link or paste it into bug reports. Start ActivityWatch again;
 **Modules → aw-calendar-sync** starts/stops the module.
 
@@ -89,12 +90,58 @@ startup is controlled by `autostart_modules`.
 
 ## Configuration
 
+The module supports multiple calendars in a single configuration. Shared
+settings remain at the top level. Each entry has a stable `calendar_id`, exactly
+one `calendar_url` or `calendar_file`, and optional `enabled` (defaults to true).
+
+```json
+{
+  "poll_seconds": 3600,
+  "lookback_days": 7,
+  "excluded_busy_statuses": ["OOF"],
+  "reconcile": true,
+  "calendars": [
+    {"calendar_id": "outlook-work", "calendar_url": "https://example.invalid/work.ics"},
+    {"calendar_id": "team", "calendar_url": "https://example.invalid/team.ics", "excluded_busy_statuses": ["OOF", "FREE"]}
+  ]
+}
+```
+
+Each calendar uses its own `aw-calendar-sync_<calendar_id>` bucket. Event UIDs
+may overlap across calendars without collision. Keep existing IDs unchanged
+when adding sources; changing an ID creates a new bucket. Entries can override
+`excluded_busy_statuses`, `reconcile`, `lookback_days`, `default_timezone`, and
+`include_attendees`; other settings are shared. Polling is hourly by default
+for all enabled calendars. Logs include the source's calendar ID, never its URL.
+
+One feed's download, parse, or AW failure does not stop other valid sources.
+Malformed overall configuration and duplicate IDs stop the cycle before writes.
+`--once` and `--dry-run` attempt all enabled sources and exit nonzero if any fail.
+Disabled or removed sources retain all their AW history: the module does not
+reconcile a bucket whose source is not enabled. Up to 32 configured sources are
+accepted; disable unused entries with `enabled: false`.
+
+The old single-calendar format remains supported. To migrate, move its
+`calendar_id` and source URL/file into the first `calendars` entry; retain all
+other settings at the top level. The optional migration helper does this
+atomically without displaying the URL:
+
+```powershell
+python .\scripts\migrate-config.py 'C:\private\config.json'
+```
+
+The helper needs Python only for migration; the AW module itself does not.
+Use `aw-calendar-sync.exe --validate-config` to check the configuration without
+fetching calendars or connecting to AW.
+Never leave top-level source fields alongside the `calendars` array.
+
 See `config.example.json`. Defaults:
 
 | Setting | Meaning |
 |---|---|
-| `calendar_url` / `calendar_file` | Exactly one source; HTTPS feed or local UTF-8 ICS file. Relative files resolve beside the config. |
-| `calendar_id` | Stable source name and bucket suffix. Keep it unchanged to preserve duplicate detection. |
+| `calendars[].calendar_url` / `calendar_file` | Exactly one source; HTTPS feed or local UTF-8 ICS file. Relative files resolve beside the config. |
+| `calendars[].calendar_id` | Unique stable source name and bucket suffix. Keep it unchanged to preserve duplicate detection. |
+| `calendars[].enabled` | true; false suspends this source while preserving its stored history. |
 | `poll_seconds` | 3600; check once per hour while AW and this module are running. |
 | `lookback_days` | Default 7 = bounded catch-up window; 1..7 = rolling days; 0 = strict today from local midnight. Never imports a future or ongoing event. |
 | `server_url` | `http://127.0.0.1:5600`; only loopback origins accepted. |
@@ -181,3 +228,7 @@ midnight, recurrence exceptions, Outlook timezone mappings and DST, revisions,
 append-only deduplication, malformed feeds, and real loopback HTTP requests,
 including failed/lost replies and recovery. Actual Outlook feed compatibility
 and launching from an installed AW tray require local runtime validation.
+Multi-calendar tests cover shared defaults, per-source overrides, legacy config,
+duplicate IDs, isolated buckets with overlapping UIDs, failed feeds, disabled
+sources, and relative paths through the actual CLI. `python tests/migration.py`
+verifies private config migration and replay without disclosing URLs.

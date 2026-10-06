@@ -1,7 +1,4 @@
 {
-  "calendar_url": "https://outlook.office365.com/REPLACE_WITH_YOUR_PRIVATE_ICS_LINK/calendar.ics",
-  "calendar_file": null,
-  "calendar_id": "outlook-work",
   "poll_seconds": 3600,
   "lookback_days": 7,
   "server_url": "http://127.0.0.1:5600",
@@ -20,5 +17,17 @@
   },
   "include_attendees": false,
   "excluded_busy_statuses": ["OOF"],
-  "reconcile": true
+  "reconcile": true,
+  "calendars": [
+    {
+      "calendar_id": "outlook-work",
+      "calendar_url": "https://outlook.office365.com/REPLACE_WITH_YOUR_PRIVATE_ICS_LINK/calendar.ics",
+      "enabled": true
+    },
+    {
+      "calendar_id": "second-work",
+      "calendar_url": "https://outlook.office365.com/REPLACE_WITH_YOUR_PRIVATE_ICS_LINK/calendar.ics",
+      "enabled": false
+    }
+  ]
 }
