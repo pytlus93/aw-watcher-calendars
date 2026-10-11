@@ -144,3 +144,12 @@ binary, live private-config interaction and reboot remain unperformed. The stage
 fixed package is ready for the coordinating chat to deploy; this component did not
 install or stop a production module. Native tests are opt-in with explicit UI
 authorization. Prior lifecycle and transport evidence remains separate.
+
+Coordinator-reported follow-up: the coordinating chat backed up the previous
+module, deployed the fixed dist executable plus matching sidecar and restarted
+the tray. It reports all three native-action tests passed against the **installed
+executable with synthetic settings** and tray/calendar/VPN processes are running.
+This component did not independently repeat that deployment or installed test.
+This is narrow installed-binary synthetic UI evidence, not proof of a user's
+actual tray click with live settings, successful calendar delivery, reboot or
+host recovery. The real user tray/live-settings retry remains pending.
