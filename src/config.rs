@@ -38,6 +38,7 @@ fn enabled() -> bool {
 }
 pub struct CalendarSet {
     pub poll_seconds: u64,
+    pub server_url: String,
     pub calendars: Vec<Config>,
 }
 fn decode<T: serde::de::DeserializeOwned>(value: Value) -> Result<T> {
@@ -62,6 +63,7 @@ impl CalendarSet {
             config.validate()?;
             return Ok(Self {
                 poll_seconds: config.poll_seconds,
+                server_url: config.server_url.clone(),
                 calendars: vec![config],
             });
         };
@@ -126,6 +128,7 @@ impl CalendarSet {
         }
         Ok(Self {
             poll_seconds: shared.poll_seconds,
+            server_url: shared.server_url,
             calendars,
         })
     }

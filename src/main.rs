@@ -1,4 +1,5 @@
 use aw_calendar_sync::{adapter::synchronize_all, config::CalendarSet, Result};
+mod actions;
 use chrono::Utc;
 use fs2::FileExt;
 use std::{
@@ -17,6 +18,9 @@ Default: stay running, import completed events from the last 7 days every 60 min
 --init-config  Create a template if absent, print its path, and exit.\n\
 --validate-config Check configuration without fetching calendars or connecting to AW.\n\
 --testing      Use port 5666 and a separate default config.\n\
+configure | status-ui | open-logs | about  Run a short-lived tray action.\n\
+--headless     Print action reports without opening native UI.\n\
+--server-url URL Override the loopback AW origin, including for actions.\n\
 Reconciliation replaces changed events and deletes excluded/missing events inside the window. Older history is preserved.";
 
 fn default_config(testing: bool) -> Result<PathBuf> {
@@ -63,12 +67,21 @@ fn init_config(path: &Path, testing: bool) -> Result<()> {
     }
     Ok(())
 }
-fn read_config(path: &Path, testing: bool) -> Result<CalendarSet> {
+fn read_config(path: &Path, testing: bool, server: Option<&str>) -> Result<CalendarSet> {
     let text = fs::read_to_string(path).map_err(|_| "cannot read config file")?;
     let mut settings = CalendarSet::from_json(&text)?;
+    if testing {
+        settings.server_url = "http://127.0.0.1:5666".into();
+    }
+    if let Some(server) = server {
+        settings.server_url = server.into();
+    }
     for c in &mut settings.calendars {
         if testing {
             c.server_url = "http://127.0.0.1:5666".into();
+        }
+        if let Some(server) = server {
+            c.server_url = server.into();
         }
         if let Some(file) = &mut c.calendar_file {
             let p = PathBuf::from(&*file);
@@ -104,6 +117,9 @@ fn run() -> Result<()> {
     let mut dry = false;
     let mut init = false;
     let mut validate = false;
+    let mut action = None;
+    let mut headless = false;
+    let mut server = None;
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--help" | "-h" => {
@@ -116,6 +132,13 @@ fn run() -> Result<()> {
             }
             "--config" => path = Some(PathBuf::from(args.next().ok_or("--config needs a path")?)),
             "--testing" => testing = true,
+            "--server-url" => server = Some(args.next().ok_or("--server-url needs a value")?),
+            "--headless" => headless = true,
+            "configure" | "status-ui" | "open-logs" | "about" => {
+                if action.replace(arg).is_some() {
+                    return Err("only one action is allowed".into());
+                }
+            }
             "--once" => once = true,
             "--dry-run" => {
                 dry = true;
@@ -126,15 +149,58 @@ fn run() -> Result<()> {
             _ => return Err("unknown argument; use --help".into()),
         }
     }
+    if let Ok(protocol) = std::env::var("AW_MODULE_ACTION_PROTOCOL") {
+        if protocol != "1" {
+            return Err("unsupported module action protocol".into());
+        }
+        let command = action
+            .as_deref()
+            .ok_or("action context requires an action command")?;
+        let expected = actions::id(command).ok_or("unknown action")?;
+        if std::env::var("AW_MODULE_ACTION").ok().as_deref() != Some(expected) {
+            return Err("module action identity mismatch".into());
+        }
+        match std::env::var("AW_TESTING").as_deref() {
+            Ok("1") => testing = true,
+            Ok("0") => (),
+            _ => return Err("AW_TESTING must be 0 or 1".into()),
+        }
+        if server.is_none() {
+            server = std::env::var("AW_SERVER_URL").ok();
+        }
+    }
+    if (headless && action.is_none()) || (action.is_some() && (once || dry || init || validate)) {
+        return Err("action options cannot be combined with producer commands".into());
+    }
+    if let Some(server) = &server {
+        let check = aw_calendar_sync::Config {
+            calendar_file: Some("context-validation.ics".into()),
+            server_url: server.clone(),
+            ..Default::default()
+        };
+        check.validate()?;
+    }
     let custom_config = path.is_some();
     let path = path.unwrap_or(default_config(testing)?);
     init_config(&path, testing)?;
+    if let Some(command) = action {
+        let result = actions::dispatch(
+            &command,
+            &path,
+            testing,
+            server.as_deref(),
+            custom_config,
+            headless,
+        );
+        actions::record_action(&path, testing, custom_config, &command, result.is_ok());
+        return result;
+    }
     if init {
         println!("{}", path.display());
         return Ok(());
     }
     if validate {
-        let settings = read_config(&path, testing)?;
+        let settings = read_config(&path, testing, server.as_deref())?;
         println!(
             "Configuration valid; {} calendars enabled",
             settings.calendars.len()
@@ -171,7 +237,7 @@ fn run() -> Result<()> {
         "module started; completed events only; bounded reconciliation configured by reconcile",
     );
     loop {
-        let config = read_config(&path, testing);
+        let config = read_config(&path, testing, server.as_deref());
         let mut wait = config.as_ref().map(|c| c.poll_seconds).unwrap_or(60);
         let mut failed = false;
         match config {
