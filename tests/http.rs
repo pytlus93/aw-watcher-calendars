@@ -25,6 +25,7 @@ struct State {
     fail_create: bool,
     outage: bool,
     insert_304: bool,
+    absent_lookup_500: bool,
 }
 struct Mock {
     url: String,
@@ -94,6 +95,7 @@ impl Mock {
                         let id: u64 = path.rsplit('/').next().unwrap().parse().unwrap();
                         match state.events.iter().find(|e| e["id"] == id) {
                             Some(e) => (200, e.clone()),
+                            None if state.absent_lookup_500 => (500, json!({})),
                             None => (404, json!({})),
                         }
                     }
@@ -340,5 +342,54 @@ fn delayed_server_and_outage_preserve_intervals_and_resume_actual_inserts() {
         assert_eq!(original["timestamp"], replay["timestamp"]);
         assert_eq!(original["duration"], replay["duration"]);
     }
+    std::fs::remove_file(path).unwrap();
+}
+
+#[test]
+fn rust_absent_lookup_500_requires_independent_deletion_confirmation() {
+    let mock = Mock::start();
+    mock.state.lock().unwrap().absent_lookup_500 = true;
+    let (config, path) = fixture(&mock, "rust-delete");
+    std::fs::write(&path, feed("Original")).unwrap();
+    synchronize(&config, window(), false).unwrap();
+    std::fs::write(&path, "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nEND:VCALENDAR\r\n").unwrap();
+    assert_eq!(synchronize(&config, window(), false).unwrap().deleted, 1);
+    assert!(mock.state.lock().unwrap().events.is_empty());
+    std::fs::remove_file(path).unwrap();
+}
+
+#[test]
+fn privacy_mode_change_reconciles_saved_payload_and_replays_without_duplicates() {
+    let mock = Mock::start();
+    let (mut config, path) = fixture(&mock, "privacy");
+    config.include_attendees = true;
+    let feed = feed("Private topic").replace(
+        "END:VEVENT",
+        "ATTENDEE:mailto:synthetic@example.invalid\r\nEND:VEVENT",
+    );
+    std::fs::write(&path, feed).unwrap();
+    synchronize(&config, window(), false).unwrap();
+    assert!(mock.state.lock().unwrap().events[0]["data"]
+        .get("attendees")
+        .is_some());
+    config.payload_mode = aw_calendar_sync::PayloadMode::Strict;
+    config.include_summary = false;
+    let report = synchronize(&config, window(), false).unwrap();
+    assert_eq!(report.inserted, 1);
+    assert_eq!(report.deleted, 1);
+    assert_eq!(synchronize(&config, window(), false).unwrap().unchanged, 1);
+    let state = mock.state.lock().unwrap();
+    assert_eq!(state.events.len(), 1);
+    let saved = state.events[0].to_string();
+    for forbidden in [
+        "Private topic",
+        "attendees",
+        "all_day",
+        "status",
+        "example.invalid",
+    ] {
+        assert!(!saved.contains(forbidden));
+    }
+    drop(state);
     std::fs::remove_file(path).unwrap();
 }

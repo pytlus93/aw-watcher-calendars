@@ -111,7 +111,8 @@ Each calendar uses its own `aw-calendar-sync_<calendar_id>` bucket. Event UIDs
 may overlap across calendars without collision. Keep existing IDs unchanged
 when adding sources; changing an ID creates a new bucket. Entries can override
 `excluded_busy_statuses`, `reconcile`, `lookback_days`, `default_timezone`, and
-`include_attendees`; other settings are shared. Polling is hourly by default
+`include_attendees`, `payload_mode`, `include_summary`, `include_all_day`, and
+`include_status`; other settings are shared. Polling is hourly by default
 for all enabled calendars. Logs include the source's calendar ID, never its URL.
 
 One feed's download, parse, or AW failure does not stop other valid sources.
@@ -147,7 +148,10 @@ See `config.example.json`. Defaults:
 | `server_url` | `http://127.0.0.1:5600`; only loopback origins accepted. |
 | `default_timezone` | `Europe/Prague`; used for today, floating times and date-only events. |
 | `timezone_aliases` | Outlook Windows timezone names mapped to IANA zones. Add mappings if needed. |
-| `include_attendees` | false; opt in to storing attendee values locally in AW. |
+| `payload_mode` | New templates: strict custom replay schema plus workspace title; existing configs without this key: extended, preserving old payloads. No official calendar schema is claimed. |
+| `include_summary` | true; false replaces SUMMARY with the neutral mandatory title. |
+| `include_all_day` / `include_status` | Individually selectable extensions, emitted only in extended mode. Missing flags default true for compatibility. |
+| `include_attendees` | false; opt in to storing nonempty attendee values locally in AW, only in extended mode. |
 | `excluded_busy_statuses` | `["OOF"]`; case-insensitive Outlook show-as statuses to exclude. Empty array disables filtering. Actual status takes precedence over intended status. |
 | `reconcile` | true; replace changed records and remove missing/cancelled/filtered records inside the active window. false retains immutable, append-only snapshots. |
 
@@ -177,7 +181,8 @@ Optional strict today-only mode (`lookback_days: 0`) disables overnight catch-up
 AW. `--once` imports once and returns a nonzero status on failure. `--testing`
 uses port 5666 and, by default, a separate `config-testing.json`. AW passes this
 flag when launching modules in test mode. The default long-running mode retries
-download/server failures on the next hourly check. It does not download cached
+failed cycles after at most 60 seconds; successful cycles keep the hourly cadence.
+It does not download cached
 stale feed data or silently disable TLS certificate checking.
 
 ## Parsing and failure behavior
@@ -198,13 +203,14 @@ the current window, to recognize moved occurrences. It refuses to import if the
 bucket belongs to another client, its schema/source differs, or it contains more
 than 50,000 records. Only the dedicated `aw-calendar-sync_<calendar_id>` bucket
 is used. Another instance using the same config is prevented by a file lock;
-use one module/config per source to avoid concurrent inserts.
+use one AW-managed module/config containing all sources to avoid concurrent inserts.
 
 Replacements are inserted and confirmed before originals are deleted. If a
 reply is lost or a deletion fails, the next check rereads AW and finishes the
 operation without inserting another replacement. An interrupted replacement
 can briefly leave both versions present. Individual DELETE requests are verified
-by reading the event back and requiring 404; no bucket deletion is implemented.
+by reading the event back and requiring 404, or confirming absence in the full
+record list after Rust-server lookup 500; no bucket deletion is implemented.
 The successfully parsed feed is authoritative within the window: missing events
 are removed. Use a complete feed/file for this source, not a partial export.
 
@@ -214,7 +220,12 @@ Bucket type: `calendar`, client: `aw-calendar-sync`.
 Timestamp is the original scheduled start in UTC; duration is seconds to the
 scheduled end. `data` contains `schema_version`, `calendar_id`, `uid`,
 `occurrence` (original occurrence start, stable for moved meetings), `title`,
-`all_day`, `status`, and optional `attendees`.
+optional `all_day`, `status`, and `attendees`, depending on payload mode/settings.
+The complete [data contract](docs/data-contract.md) documents every field,
+privacy/default/unavailable behavior, migration and ordering limitations.
+There is no official standard `calendar` bucket contract. Strict here means the
+required **custom** replay fields plus workspace `title`; official-only strict
+semantics and an integrated AW settings form remain open requirements.
 
 Calendar import adds raw events to AW. It does not add a new dashboard page or
 merge meetings into tracked active time; these are inputs for the planned review
@@ -223,12 +234,9 @@ the AW REST adapter is separate (`src/adapter.rs`).
 
 ## Validation
 
-`cargo test --locked` covers time windows, completed/future filtering, local
-midnight, recurrence exceptions, Outlook timezone mappings and DST, revisions,
-append-only deduplication, malformed feeds, and real loopback HTTP requests,
-including failed/lost replies and recovery. Actual Outlook feed compatibility
-and launching from an installed AW tray require local runtime validation.
-Multi-calendar tests cover shared defaults, per-source overrides, legacy config,
-duplicate IDs, isolated buckets with overlapping UIDs, failed feeds, disabled
-sources, and relative paths through the actual CLI. `python tests/migration.py`
-verifies private config migration and replay without disclosing URLs.
+See [validation evidence and remaining requirements](docs/validation.md).
+The Rust suite covers parsing, multi-source isolation, bounded reconciliation,
+uncertain responses, first bucket creation, creation-only 304, genuine failures,
+outage/restart replay, privacy selections and serialization. Python tests cover
+private config migration and isolated executable lifecycle/late-server delivery.
+These checks do not establish installed-host reboot/crash recovery or GUI support.

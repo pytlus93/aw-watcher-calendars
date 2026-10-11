@@ -13,6 +13,13 @@ use std::{
 
 pub type Result<T> = std::result::Result<T, String>;
 
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PayloadMode {
+    Strict,
+    Extended,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Config {
@@ -24,6 +31,10 @@ pub struct Config {
     pub default_timezone: String,
     pub timezone_aliases: BTreeMap<String, String>,
     pub include_attendees: bool,
+    pub payload_mode: PayloadMode,
+    pub include_summary: bool,
+    pub include_all_day: bool,
+    pub include_status: bool,
     pub excluded_busy_statuses: Vec<String>,
     pub reconcile: bool,
     /// 0 = current local calendar day, 1..=7 = rolling days.
@@ -54,6 +65,11 @@ impl Default for Config {
             .map(|(a, b)| (a.into(), b.into()))
             .collect(),
             include_attendees: false,
+            // Preserve the pre-mode payload for existing configurations.
+            payload_mode: PayloadMode::Extended,
+            include_summary: true,
+            include_all_day: true,
+            include_status: true,
             excluded_busy_statuses: vec!["OOF".into()],
             reconcile: true,
             lookback_days: 7,
@@ -179,8 +195,10 @@ pub struct CalendarData {
     /// Original occurrence start, unchanged when an exception moves a meeting.
     pub occurrence: String,
     pub title: String,
-    pub all_day: bool,
-    pub status: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub all_day: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub status: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub attendees: Vec<String>,
 }
@@ -499,10 +517,22 @@ fn make_event(
             calendar_id: config.calendar_id.clone(),
             uid: value(event, "UID").ok_or("event missing UID")?.to_string(),
             occurrence: occurrence.to_rfc3339(),
-            title: unescape(value(event, "SUMMARY").unwrap_or("(untitled)")),
-            all_day: start.all_day,
-            status: value(event, "STATUS").unwrap_or("CONFIRMED").into(),
-            attendees: if config.include_attendees {
+            title: if config.include_summary {
+                let summary = unescape(value(event, "SUMMARY").unwrap_or(""));
+                let concise = summary.split_whitespace().collect::<Vec<_>>().join(" ");
+                if concise.is_empty() {
+                    "Meeting (title unavailable)".into()
+                } else {
+                    concise.chars().take(200).collect()
+                }
+            } else {
+                "Meeting (title unavailable)".into()
+            },
+            all_day: (config.payload_mode == PayloadMode::Extended && config.include_all_day)
+                .then_some(start.all_day),
+            status: (config.payload_mode == PayloadMode::Extended && config.include_status)
+                .then(|| value(event, "STATUS").unwrap_or("CONFIRMED").into()),
+            attendees: if config.payload_mode == PayloadMode::Extended && config.include_attendees {
                 props(event, "ATTENDEE")
                     .filter_map(|p| p.value.clone())
                     .collect()

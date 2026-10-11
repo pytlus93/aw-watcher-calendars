@@ -1,5 +1,5 @@
 //! Multiple sources with shared defaults; legacy single-source JSON remains supported.
-use crate::{Config, Result};
+use crate::{Config, PayloadMode, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashSet;
@@ -22,6 +22,14 @@ pub struct CalendarSource {
     pub default_timezone: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub include_attendees: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub payload_mode: Option<PayloadMode>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub include_summary: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub include_all_day: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub include_status: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub lookback_days: Option<u32>,
 }
@@ -88,6 +96,18 @@ impl CalendarSet {
             if let Some(attendees) = source.include_attendees {
                 config.include_attendees = attendees;
             }
+            if let Some(mode) = source.payload_mode {
+                config.payload_mode = mode;
+            }
+            if let Some(enabled) = source.include_summary {
+                config.include_summary = enabled;
+            }
+            if let Some(enabled) = source.include_all_day {
+                config.include_all_day = enabled;
+            }
+            if let Some(enabled) = source.include_status {
+                config.include_status = enabled;
+            }
             if let Some(days) = source.lookback_days {
                 config.lookback_days = days;
             }
@@ -110,7 +130,10 @@ impl CalendarSet {
         })
     }
     pub fn template(testing: bool) -> Value {
-        let mut settings = Config::default();
+        let mut settings = Config {
+            payload_mode: PayloadMode::Strict,
+            ..Config::default()
+        };
         if testing {
             settings.server_url = "http://127.0.0.1:5666".into();
         }

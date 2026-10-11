@@ -16,6 +16,10 @@
     "Sri Lanka Standard Time": "Asia/Colombo"
   },
   "include_attendees": false,
+  "payload_mode": "strict",
+  "include_summary": true,
+  "include_all_day": false,
+  "include_status": false,
   "excluded_busy_statuses": ["OOF"],
   "reconcile": true,
   "calendars": [

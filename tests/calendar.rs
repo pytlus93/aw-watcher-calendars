@@ -136,7 +136,7 @@ fn all_day_span_respects_dst_and_completion() {
     )
     .unwrap();
     assert_eq!(result.len(), 1);
-    assert!(result[0].data.all_day);
+    assert_eq!(result[0].data.all_day, Some(true));
     assert_eq!(result[0].duration, 25.0 * 3600.0);
     let w = config().window(utc("2026-10-25T15:00:00Z")).unwrap();
     assert!(parse_calendar(&feed, &config(), w).unwrap().is_empty());
@@ -217,7 +217,7 @@ fn duration_and_folded_text_and_attendee_opt_in() {
     let feed = calendar("BEGIN:VEVENT\r\nUID:duration\r\nDTSTART:20261005T090000Z\r\nDURATION:PT1H30M\r\nSUMMARY:Hello\\, world\\nsecond\r\n line\r\nATTENDEE:mailto:synthetic@example.invalid\r\nEND:VEVENT\r\n");
     let result = parse_calendar(&feed, &config(), window()).unwrap();
     assert_eq!(result[0].duration, 5400.0);
-    assert_eq!(result[0].data.title, "Hello, world\nsecondline");
+    assert_eq!(result[0].data.title, "Hello, world secondline");
     assert!(result[0].data.attendees.is_empty());
     let result = parse_calendar(
         &feed,
