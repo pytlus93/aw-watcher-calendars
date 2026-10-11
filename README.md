@@ -66,6 +66,9 @@ in the first `calendars` entry with your private, direct Outlook HTTPS ICS link.
 Leave `calendar_file` absent or null for URL sources.
 Do not commit the link or paste it into bug reports. Start ActivityWatch again;
 **Modules → aw-calendar-sync** starts/stops the module.
+An enhanced aw-qt can also show configuration/privacy, status, safe logs and About
+actions from the packaged sidecar. Original trays retain the ordinary toggle.
+See [tray actions and rollback](docs/module-actions.md); no Refresh action is advertised.
 
 On Windows the default config is:
 
@@ -225,7 +228,8 @@ The complete [data contract](docs/data-contract.md) documents every field,
 privacy/default/unavailable behavior, migration and ordering limitations.
 There is no official standard `calendar` bucket contract. Strict here means the
 required **custom** replay fields plus workspace `title`; official-only strict
-semantics and an integrated AW settings form remain open requirements.
+semantics and dedicated settings selectors remain open requirements. A native
+configuration/privacy JSON editor is now available through the tray actions protocol.
 
 Calendar import adds raw events to AW. It does not add a new dashboard page or
 merge meetings into tracked active time; these are inputs for the planned review

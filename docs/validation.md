@@ -11,12 +11,13 @@ Toolchain: Rust/cargo 1.99.0, Windows/MSVC target, Python 3.14.7.
 
 | Check | Result | Evidence boundary |
 |---|---|---|
-| `cargo test --locked` | PASS: 42 tests | 13 parsing, 12 HTTP, 1 multi-source HTTP, 4 multi-config/CLI, 6 Outlook, 3 payload, 3 reconciliation |
+| `cargo test --locked` | PASS: 43 tests | 42 original regressions plus validated atomic configuration save |
 | `cargo clippy --locked --all-targets -- -D warnings` | PASS | All targets; no suppressed new warnings |
 | `./scripts/build.ps1 -Package` | PASS | Release executable and ZIP; not installed into production |
 | `python tests/migration.py` | PASS: 2 tests | Preserves private source/settings and original bytes on invalid input; idempotent |
 | `./tests/install-smoke.ps1` | PASS: 5 variants, repeated installation | Synthetic AW folder/config under ignored local; no production installation |
 | `python tests/lifecycle.py` | PASS: 2 tests, about 66 seconds | Real module child processes and isolated loopback server |
+| `python tests/actions.py` | PASS: 6 tests | Protocol dispatch/context, safe reports, producer singleton bypass and manifest/release/ZIP consistency; headless only |
 | `python ../aw-qt/tests/test_recovery_standalone.py` | PASS: 5 tests | Current sibling host-source policy with synthetic module objects; not installed-host evidence |
 
 HTTP regressions use real sockets and a synthetic AW-like server: first bucket
@@ -76,7 +77,7 @@ and maintained ureq 2.12.1 `send_json` implementation (direct serde byte seriali
 
 | Requirement | Status and next evidence needed |
 |---|---|
-| Host settings UI for per-field selections | MISSING: JSON configuration via AW config folder only; needs an AW-host form, not a standalone product |
+| Host settings UI for per-field selections | PARTIAL: native configuration/privacy JSON editor via host-owned tray action is implemented; dedicated selectors and visual validation remain open |
 | Official-only strict data fields plus title | MISSING: no official calendar schema exists; current strict preserves documented mandatory custom replay identity. Removing it safely needs a durable identity journal/migration |
 | Windows login after hard PC restart | UNPERFORMED: requires authorized reboot/login observation; autostart config alone is insufficient |
 | Installed host automatic crash/failed-relaunch recovery | UNPERFORMED: policy/source tests pass; production process disruption was prohibited |
@@ -87,3 +88,24 @@ and maintained ureq 2.12.1 `send_json` implementation (direct serde byte seriali
 The module remains an interval importer. Foreground/idle heartbeat recovery is
 inapplicable: imports retry fixed scheduled intervals within the bounded window,
 never fabricate active-work observations or extend through idle/outage gaps.
+
+## Tray actions integration (same-day follow-up)
+
+Protocol 1 adds Configure sources/privacy, Connection/last sync status, Safe logs
+and About actions. Shared config/profile/testing resolution and explicit CLI
+server overrides are covered. Helpers dispatch before producer locking/collection;
+unknown commands and invalid protocol/action identity fail without starting a
+producer. Tests run helpers alongside an isolated real producer and verify a
+second producer is still rejected. Valid info and unavailable-server reports are
+honest and no feed access or event write is performed by management commands.
+
+Native UI compiles/links using Win32 directly and spawns no descendants. It was
+not opened or visually validated. Headless configuration checks do not test GUI
+interaction; the separate unit test exercises its validated atomic save function.
+The installer smoke test additionally checks sidecar copies and stale-sidecar
+removal for rollback input without an adjacent manifest. Lifecycle was rerun and
+passed two tests in about 63 seconds. Migration tests still pass. Original tray
+compatibility is source/package design evidence, not a new installed-tray test.
+No IPC/Refresh command is advertised. No live deployment or GitHub workflow was
+performed. See [action protocol documentation](module-actions.md) for commands,
+privacy-safe separate action logs and rollback instructions.

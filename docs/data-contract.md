@@ -47,9 +47,10 @@ The example config explicitly sets optional flags false. `--init-config` uses
 strict mode; its all-day/status flags are inactive until extended is selected.
 The existing calendar-list migration preserves all original settings. No live
 config is rewritten by mode introduction, and attendee collection stays off.
-Settings are currently edited through AW's **Open config folder**. An integrated
-AW settings form with selectors is **not implemented**, so the settings-UI
-requirement remains open. No independent settings executable is deployed.
+Settings can be edited through AW's **Open config folder** or the host-owned native
+configuration/privacy JSON editor exposed by [tray actions](module-actions.md).
+Dedicated checkbox/dropdown selectors are not implemented. The editor runs as a
+short-lived action in the module executable, never an independent producer.
 
 ## Every emitted `data` field
 

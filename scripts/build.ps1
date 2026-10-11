@@ -15,11 +15,12 @@ try {
     }
     & $cargoCommand build --release --locked
     if ($LASTEXITCODE -ne 0) { throw 'Build failed' }
+    Copy-Item -LiteralPath aw-calendar-sync.exe.actions.json -Destination target\release\aw-calendar-sync.exe.actions.json -Force
     if ($Package) {
         New-Item -ItemType Directory -Path dist -Force | Out-Null
         $stage = Join-Path $root 'dist\aw-calendar-sync'
         New-Item -ItemType Directory -Path $stage -Force | Out-Null
-        Copy-Item -LiteralPath target\release\aw-calendar-sync.exe,README.md,config.example.json,LICENSE -Destination $stage -Force
+        Copy-Item -LiteralPath target\release\aw-calendar-sync.exe,aw-calendar-sync.exe.actions.json,README.md,config.example.json,LICENSE -Destination $stage -Force
         Copy-Item -LiteralPath scripts\install.ps1 -Destination $stage -Force
         New-Item -ItemType Directory -Path (Join-Path $stage 'scripts') -Force | Out-Null
         Copy-Item -LiteralPath scripts\migrate-config.py -Destination (Join-Path $stage 'scripts') -Force

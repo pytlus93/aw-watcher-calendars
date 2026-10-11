@@ -21,5 +21,8 @@ over or stop live modules for validation without separate user authorization.
 
 AW owns launch/recovery/UI; audit the host separately and distinguish host-source
 tests from installed-host evidence. Do not claim login/reboot recovery from an
-autostart config. A calendar settings form and official-only strict payload remain
+autostart config. Run `python tests/actions.py` after packaging for isolated tray
+protocol checks; do not open native dialogs during automated tests. Package/install
+the executable's exact `.actions.json` sidecar and remove it on incompatible rollback.
+Dedicated calendar settings selectors and official-only strict payload remain
 open requirements; do not disguise custom identity properties as AW standards.

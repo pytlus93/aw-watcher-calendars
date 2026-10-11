@@ -20,6 +20,14 @@ $destination = Join-Path $installRoot 'aw-calendar-sync'
 New-Item -ItemType Directory -Path $destination -Force | Out-Null
 $installedExe = Join-Path $destination 'aw-calendar-sync.exe'
 Copy-Item -LiteralPath $Executable -Destination $installedExe -Force
+$sourceActions = "$Executable.actions.json"
+$installedActions = "$installedExe.actions.json"
+if (Test-Path -LiteralPath $sourceActions -PathType Leaf) {
+    Copy-Item -LiteralPath $sourceActions -Destination $installedActions -Force
+} elseif (Test-Path -LiteralPath $installedActions) {
+    # Rollback to an executable without actions must remove the stale sidecar.
+    Remove-Item -LiteralPath $installedActions
+}
 $configPath = & $installedExe --init-config
 if ($LASTEXITCODE -ne 0) { throw 'Config initialization failed' }
 if (-not $NoAutostart) {
