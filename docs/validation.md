@@ -99,8 +99,8 @@ producer. Tests run helpers alongside an isolated real producer and verify a
 second producer is still rejected. Valid info and unavailable-server reports are
 honest and no feed access or event write is performed by management commands.
 
-Native UI compiles/links using Win32 directly and spawns no descendants. It was
-not opened or visually validated. Headless configuration checks do not test GUI
+At the initial integration, native UI compiled/linked but was not opened.
+Headless configuration checks do not test GUI
 interaction; the separate unit test exercises its validated atomic save function.
 The installer smoke test additionally checks sidecar copies and stale-sidecar
 removal for rollback input without an adjacent manifest. Lifecycle was rerun and
@@ -109,3 +109,38 @@ compatibility is source/package design evidence, not a new installed-tray test.
 No IPC/Refresh command is advertised. No live deployment or GitHub workflow was
 performed. See [action protocol documentation](module-actions.md) for commands,
 privacy-safe separate action logs and rollback instructions.
+
+## Native configuration follow-up — 2026-10-11
+
+The user reported the installed calendar action as crashing. Installed and local
+release SHA-256 matched. With synthetic configuration, both normal launches stayed
+alive and normal-launch Save worked. No matching application-fault event was found.
+The reproduced defect is specifically an **invisible editor under the tray's
+hidden startup flag**, not a demonstrated exception or process crash.
+
+The installed baseline's real native visibility regression fails after five
+seconds: its `AwCalendarConfig` window exists but `IsWindowVisible` remains false
+with STARTF_USESHOWWINDOW/SW_HIDE. The fixed editor is built before it is explicitly
+shown, consumes the startup flag and then shows itself. Save/error dialogs now have
+the editor as owner and disable it while modal. The edit text limit is explicitly
+131072 characters to match Save validation, and message-loop failures are errors.
+
+This startup behavior is documented by Microsoft's
+[ShowWindow reference](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-showwindow).
+
+Local evidence: 43 Rust tests and warning-denied clippy pass; release/ZIP builds;
+all six headless action tests pass. `python tests/native_actions.py -v` passes
+three **real native UI** tests on release and the staged-package executable:
+visible initial editor text and Save/Cancel controls, Cancel without writes,
+invalid-edit Save preserving original bytes, an owned modal error dialog followed
+by a valid >32 KiB Save, owned modal confirmation, close without writes, zero exit,
+no producer singleton/collection. The harness uses actual Win32 control messages,
+not helper headless mode or a mock UI. Config/profile data are private-isolated and
+synthetic; no live config contents were read or edited. Only isolated action children
+were closed/terminated. Read-only live config size and binary hashes were checked.
+
+Pixel-level visual layout/signoff, a real installed-tray click, deployed fixed
+binary, live private-config interaction and reboot remain unperformed. The staged
+fixed package is ready for the coordinating chat to deploy; this component did not
+install or stop a production module. Native tests are opt-in with explicit UI
+authorization. Prior lifecycle and transport evidence remains separate.

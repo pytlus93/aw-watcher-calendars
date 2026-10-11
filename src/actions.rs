@@ -242,6 +242,9 @@ mod native {
         fn DispatchMessageW(m: *const Message) -> isize;
         fn GetWindowTextLengthW(h: Handle) -> i32;
         fn GetWindowTextW(h: Handle, text: *mut u16, count: i32) -> i32;
+        fn ShowWindow(h: Handle, command: i32) -> i32;
+        fn UpdateWindow(h: Handle) -> i32;
+        fn SendMessageW(h: Handle, m: u32, w: usize, l: isize) -> isize;
     }
     #[link(name = "kernel32")]
     extern "system" {
@@ -252,13 +255,19 @@ mod native {
     }
     thread_local! {static EDITOR: RefCell<Option<(PathBuf,Handle)>> = const {RefCell::new(None)};}
     pub fn message(text: &str) -> Result<()> {
+        message_owned(ptr::null_mut(), text)
+    }
+    fn message_owned(owner: Handle, text: &str) -> Result<()> {
         unsafe {
-            MessageBoxW(
-                ptr::null_mut(),
+            if MessageBoxW(
+                owner,
                 wide(text).as_ptr(),
                 wide("Calendar sync").as_ptr(),
                 0,
-            );
+            ) == 0
+            {
+                return Err("cannot display action dialog".into());
+            }
         }
         Ok(())
     }
@@ -267,12 +276,12 @@ mod native {
             EDITOR.with(|state| {
                 if let Some((path,edit)) = state.borrow().as_ref() {
                     let length = GetWindowTextLengthW(*edit);
-                    if length <= 0 || length > 131072 { let _ = message("Config must contain 1..131072 characters."); return; }
+                    if length <= 0 || length > 131072 { let _ = message_owned(h,"Config must contain 1..131072 characters."); return; }
                     let mut text=vec![0u16;length as usize+1];
                     GetWindowTextW(*edit,text.as_mut_ptr(),length+1);
                     match save_config(path,&String::from_utf16_lossy(&text[..length as usize])) {
-                        Ok(()) => {let _=message("Saved. The running module reloads at its next check. No import was started.");DestroyWindow(h);}
-                        Err(e) => {let _=message(&format!("Not saved: {e}"));}
+                        Ok(()) => {let _=message_owned(h,"Saved. The running module reloads at its next check. No import was started.");DestroyWindow(h);}
+                        Err(e) => {let _=message_owned(h,&format!("Not saved: {e}"));}
                     }
                 }
             });
@@ -315,7 +324,7 @@ mod native {
                 0,
                 name.as_ptr(),
                 wide("Calendar sources and privacy").as_ptr(),
-                0x10ca0000,
+                0x00ca0000,
                 100,
                 100,
                 900,
@@ -347,6 +356,7 @@ mod native {
                 DestroyWindow(window);
                 return Err("cannot create config editor".into());
             }
+            SendMessageW(edit, 0xc5, 131072, 0); // EM_SETLIMITTEXT, matching validation.
             EDITOR.with(|state| *state.borrow_mut() = Some((path.to_owned(), edit)));
             for (label, id, x) in [("Save", 1, 665), ("Cancel", 2, 765)] {
                 CreateWindowExW(
@@ -364,10 +374,21 @@ mod native {
                     ptr::null_mut(),
                 );
             }
+            // aw-qt hides helper console windows with STARTF_USESHOWWINDOW/SW_HIDE.
+            // Windows applies that startup flag to the first ShowWindow call too.
+            // Consume it, then explicitly show the completed native editor.
+            ShowWindow(window, 1);
+            ShowWindow(window, 5);
+            UpdateWindow(window);
             let mut msg = std::mem::zeroed::<Message>();
             loop {
                 let result = GetMessageW(&mut msg, ptr::null_mut(), 0, 0);
-                if result <= 0 {
+                if result == -1 {
+                    DestroyWindow(window);
+                    EDITOR.with(|state| *state.borrow_mut() = None);
+                    return Err("configuration message loop failed".into());
+                }
+                if result == 0 {
                     break;
                 }
                 TranslateMessage(&msg);

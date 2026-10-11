@@ -94,9 +94,24 @@ rejection, and release/ZIP manifest equality. Installer smoke tests check matchi
 sidecar copies, repeated installation and removal when the supplied executable
 has no sidecar. The Rust unit test checks invalid-edit preservation and atomic Save.
 
-The native windows compiled and linked, but dialogs were **not opened or visually
-validated**. No installed enhanced-tray click, actual GUI interaction, live server
-action, host-exit dialog cleanup or reboot was tested. The host's ownership/reaping
-behavior is specified by its protocol and is not established by these headless
+The initial integration only compiled/linked native windows and ran headless
+tests. A follow-up reproduced the host's actual hidden-console launch condition:
+`STARTF_USESHOWWINDOW/SW_HIDE` made the editor invisible while its process stayed
+alive. Normal shell launch did not reproduce it. The fixed editor consumes that
+startup flag, explicitly shows the completed window, and owns Save/error dialogs.
+
+With explicit permission, `python tests/native_actions.py -v` now opens and operates
+real native windows on synthetic named/testing-profile data, using exactly the
+manifest `configure` command and hidden-startup context. Three tests pass: initial
+text/control visibility, Cancel preservation, invalid Save preservation, owned
+modal error/confirmation dialogs, a >32 KiB valid Save, window-close preservation,
+clean exits and no producer lock. The installed pre-fix binary fails the visibility
+test; the fixed release and staged package pass. The test may terminate only its
+own action helper. It is opt-in and must not be run without UI authorization.
+
+No actual installed-tray click, live private-config action, live server action,
+host-exit dialog cleanup or reboot was tested. Pixel-level visual signoff remains
+unperformed: native visibility/content/control interaction assertions are the
+evidence, not screenshot rendering. Host ownership/reaping is not established by
 component tests. See [validation evidence](validation.md). No GitHub workflows
 were added or used.
