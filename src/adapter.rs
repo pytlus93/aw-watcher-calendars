@@ -30,6 +30,9 @@ fn http_error(error: ureq::Error, action: &str) -> String {
     }
 }
 fn json_response(response: ureq::Response) -> Result<Value> {
+    if response.status() != 200 {
+        return Err("AW JSON endpoint returned an unexpected HTTP status".into());
+    }
     let text = read_limited(response.into_reader(), MAX_AW)?;
     serde_json::from_str(&text).map_err(|_| "invalid AW JSON response".into())
 }
@@ -92,10 +95,15 @@ impl AwAdapter {
         let metadata = match self.agent.get(&self.url("")).call() {
             Ok(r) => json_response(r)?,
             Err(ureq::Error::Status(404, _)) => {
-                self.agent.post(&self.url("")).send_json(json!({
+                match self.agent.post(&self.url("")).send_json(json!({
                     "client":"aw-calendar-sync", "type":"calendar",
                     "hostname": std::env::var("COMPUTERNAME").unwrap_or_else(|_| "localhost".into())
-                })).map_err(|e| http_error(e,"create calendar bucket"))?;
+                })) {
+                    Ok(r) if matches!(r.status(), 200 | 304) => (),
+                    Err(ureq::Error::Status(304, _)) => (),
+                    Ok(_) => return Err("create calendar bucket: unexpected HTTP status".into()),
+                    Err(e) => return Err(http_error(e, "create calendar bucket")),
+                }
                 json_response(
                     self.agent
                         .get(&self.url(""))
@@ -148,8 +156,12 @@ impl AwAdapter {
         let response = self
             .agent
             .post(&self.url("/events"))
-            .send_json(json!([event]))
+            // Serialize the struct directly; json! would sort data keys first.
+            .send_json(std::slice::from_ref(event))
             .map_err(|e| http_error(e, "insert calendar event"))?;
+        if response.status() != 200 {
+            return Err("insert calendar event: unexpected HTTP status".into());
+        }
         let result = json_response(response);
         if result
             .as_ref()
@@ -174,11 +186,22 @@ impl AwAdapter {
     pub fn delete(&self, id: u64) -> Result<()> {
         let endpoint = self.url(&format!("/events/{id}"));
         match self.agent.delete(&endpoint).call() {
-            Ok(_) | Err(ureq::Error::Status(404, _)) => (),
+            Ok(r) if r.status() == 200 => (),
+            Err(ureq::Error::Status(404, _)) => (),
+            Ok(_) => return Err("delete calendar event: unexpected HTTP status".into()),
             Err(e) => return Err(http_error(e, "delete calendar event")),
         }
         match self.agent.get(&endpoint).call() {
             Err(ureq::Error::Status(404, _)) => Ok(()),
+            // aw-server-rust can return 500 for an absent event. Never equate
+            // that status with absence; confirm against the complete event list.
+            Err(ureq::Error::Status(500, _)) => {
+                if self.records()?.iter().any(|record| record.id == id) {
+                    Err("deleted calendar event is still present".into())
+                } else {
+                    Ok(())
+                }
+            }
             Ok(_) => Err("deleted calendar event is still present".into()),
             Err(e) => Err(http_error(e, "verify calendar event deletion")),
         }

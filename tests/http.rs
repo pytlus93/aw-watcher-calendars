@@ -21,6 +21,10 @@ struct State {
     count_reply: bool,
     next_id: u64,
     fail_delete: bool,
+    bucket_race: bool,
+    fail_create: bool,
+    outage: bool,
+    insert_304: bool,
 }
 struct Mock {
     url: String,
@@ -73,6 +77,13 @@ impl Mock {
                 let mut state = s.lock().unwrap();
                 state.methods.push(method.clone());
                 let (code, value) = match (method.as_str(), path.contains("/events")) {
+                    _ if state.outage => (503, json!({})),
+                    ("POST", false) if state.fail_create => (503, json!({})),
+                    ("POST", false) if state.bucket_race => {
+                        state.bucket = true;
+                        (304, json!({}))
+                    }
+                    ("POST", true) if state.insert_304 => (304, json!({})),
                     ("DELETE", true) if state.fail_delete => (503, json!({})),
                     ("DELETE", true) => {
                         let id: u64 = path.rsplit('/').next().unwrap().parse().unwrap();
@@ -265,5 +276,69 @@ fn failed_deletion_is_recovered_without_reinserting_replacement() {
     assert_eq!(report.inserted, 0);
     assert_eq!(report.deleted, 1);
     assert_eq!(mock.state.lock().unwrap().events.len(), 1);
+    std::fs::remove_file(path).unwrap();
+}
+
+#[test]
+fn existing_bucket_race_304_and_producer_restart_resume_delivery() {
+    let mock = Mock::start();
+    mock.state.lock().unwrap().bucket_race = true;
+    let (config, path) = fixture(&mock, "bucket-race");
+    std::fs::write(&path, feed("Original")).unwrap();
+    assert_eq!(synchronize(&config, window(), false).unwrap().inserted, 1);
+    // synchronize constructs a fresh adapter each time: producer restart/replay.
+    assert_eq!(synchronize(&config, window(), false).unwrap().unchanged, 1);
+    assert_eq!(mock.state.lock().unwrap().events.len(), 1);
+    std::fs::remove_file(path).unwrap();
+}
+
+#[test]
+fn genuine_creation_failure_and_non_creation_304_do_not_count_as_success() {
+    let mock = Mock::start();
+    let (config, path) = fixture(&mock, "bad-status");
+    std::fs::write(&path, feed("Original")).unwrap();
+    mock.state.lock().unwrap().fail_create = true;
+    assert!(synchronize(&config, window(), false)
+        .err()
+        .unwrap()
+        .contains("HTTP 503"));
+    assert!(mock.state.lock().unwrap().events.is_empty());
+    mock.state.lock().unwrap().fail_create = false;
+    mock.state.lock().unwrap().insert_304 = true;
+    assert!(synchronize(&config, window(), false).is_err());
+    assert!(mock.state.lock().unwrap().events.is_empty());
+    mock.state.lock().unwrap().insert_304 = false;
+    assert_eq!(synchronize(&config, window(), false).unwrap().inserted, 1);
+    std::fs::remove_file(path).unwrap();
+}
+
+#[test]
+fn delayed_server_and_outage_preserve_intervals_and_resume_actual_inserts() {
+    let mock = Mock::start();
+    let (config, path) = fixture(&mock, "outage");
+    let two = feed("First").replace("END:VCALENDAR", "BEGIN:VEVENT\r\nUID:second\r\nSUMMARY:Second\r\nDTSTART:20261005T110000Z\r\nDTEND:20261005T113000Z\r\nEND:VEVENT\r\nEND:VCALENDAR");
+    std::fs::write(&path, &two).unwrap();
+    mock.state.lock().unwrap().outage = true;
+    assert!(synchronize(&config, window(), false).is_err());
+    mock.state.lock().unwrap().outage = false;
+    assert_eq!(synchronize(&config, window(), false).unwrap().inserted, 2);
+    let saved = mock.state.lock().unwrap().events.clone();
+    assert_eq!(saved[0]["timestamp"], "2026-10-05T09:00:00Z");
+    assert_eq!(saved[0]["duration"], 3600.0);
+    assert_eq!(saved[1]["timestamp"], "2026-10-05T11:00:00Z");
+    assert_eq!(saved[1]["duration"], 1800.0);
+    mock.state.lock().unwrap().outage = true;
+    assert!(synchronize(&config, window(), false).is_err());
+    mock.state.lock().unwrap().outage = false;
+    assert_eq!(synchronize(&config, window(), false).unwrap().unchanged, 2);
+    // Simulate restart with lost server storage, then verify actual redelivery.
+    mock.state.lock().unwrap().bucket = false;
+    mock.state.lock().unwrap().events.clear();
+    assert_eq!(synchronize(&config, window(), false).unwrap().inserted, 2);
+    let replayed = mock.state.lock().unwrap().events.clone();
+    for (original, replay) in saved.iter().zip(replayed.iter()) {
+        assert_eq!(original["timestamp"], replay["timestamp"]);
+        assert_eq!(original["duration"], replay["duration"]);
+    }
     std::fs::remove_file(path).unwrap();
 }

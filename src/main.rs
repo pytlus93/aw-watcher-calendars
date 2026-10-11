@@ -172,7 +172,7 @@ fn run() -> Result<()> {
     );
     loop {
         let config = read_config(&path, testing);
-        let wait = config.as_ref().map(|c| c.poll_seconds).unwrap_or(60);
+        let mut wait = config.as_ref().map(|c| c.poll_seconds).unwrap_or(60);
         let mut failed = false;
         match config {
             Ok(settings) => {
@@ -211,6 +211,10 @@ fn run() -> Result<()> {
                 return Err("one or more calendar imports failed; see log".into());
             }
             break;
+        }
+        if failed {
+            // Bounded catch-up retries; successful cycles retain the hourly cadence.
+            wait = wait.min(60);
         }
         thread::sleep(Duration::from_secs(wait));
     }
