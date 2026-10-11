@@ -23,6 +23,7 @@ try {
         Copy-Item -LiteralPath scripts\install.ps1 -Destination $stage -Force
         New-Item -ItemType Directory -Path (Join-Path $stage 'scripts') -Force | Out-Null
         Copy-Item -LiteralPath scripts\migrate-config.py -Destination (Join-Path $stage 'scripts') -Force
+        Copy-Item -LiteralPath docs -Destination $stage -Recurse -Force
         Compress-Archive -LiteralPath $stage -DestinationPath dist\aw-calendar-sync-0.1.0-windows-x64.zip -Force
     }
 } finally { Pop-Location }
