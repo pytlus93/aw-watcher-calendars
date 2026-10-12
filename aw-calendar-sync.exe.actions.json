@@ -2,9 +2,33 @@
   "schema_version": 1,
   "module": "aw-calendar-sync",
   "actions": [
-    {"id": "configure", "label": "Configure sources and privacy…", "args": ["configure"]},
-    {"id": "status", "label": "Connection and last sync status…", "args": ["status-ui"]},
-    {"id": "logs", "label": "View safe logs…", "args": ["open-logs"]},
-    {"id": "about", "label": "About…", "args": ["about"]}
+    {
+      "id": "configure",
+      "label": "Settings…",
+      "args": [
+        "configure"
+      ]
+    },
+    {
+      "id": "status",
+      "label": "Status…",
+      "args": [
+        "status-ui"
+      ]
+    },
+    {
+      "id": "logs",
+      "label": "Logs…",
+      "args": [
+        "open-logs"
+      ]
+    },
+    {
+      "id": "about",
+      "label": "About…",
+      "args": [
+        "about"
+      ]
+    }
   ]
 }

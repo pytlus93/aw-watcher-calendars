@@ -7,9 +7,9 @@ modification. aw-tauri does not currently consume this protocol.
 
 | Menu action | Command | Implemented behavior |
 |---|---|---|
-| Configure sources and privacy… | `configure` | Native Windows JSON editor with Save/Cancel, privacy-setting guidance and validated atomic replacement; works with AW stopped |
-| Connection and last sync status… | `status-ui` | Read-only, three-second loopback `/api/0/info` probe plus recent redacted counts; reports unavailable/invalid response honestly |
-| View safe logs… | `open-logs` | Native dialog showing up to 30 newest timestamps/counts; arbitrary error text, URLs, titles, attendees and source names omitted |
+| Settings… | `configure` | Native Windows JSON editor with Save/Cancel, privacy-setting guidance and validated atomic replacement; works with AW stopped |
+| Status… | `status-ui` | Read-only, three-second loopback `/api/0/info` probe plus recent redacted counts; reports unavailable/invalid response honestly |
+| Logs… | `open-logs` | Native dialog showing up to 30 newest timestamps/counts; arbitrary error text, URLs, titles, attendees and source names omitted |
 | About… | `about` | Native version/capability dialog |
 
 These are short-lived helpers in the same executable, dispatched **before** the
@@ -115,3 +115,7 @@ unperformed: native visibility/content/control interaction assertions are the
 evidence, not screenshot rendering. Host ownership/reaping is not established by
 component tests. See [validation evidence](validation.md). No GitHub workflows
 were added or used.
+
+## Shared menu convention
+
+Use Running first (owned by AW), then Settings…, Status…, Logs…, About… in that order. Omit unsupported actions. Stable action IDs and existing command arguments stay unchanged. Module-specific details belong inside the dialogs rather than common menu labels. Logs are privacy-safe; Status must distinguish server reachability, producer state and delivery evidence.
