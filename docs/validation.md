@@ -153,3 +153,8 @@ This component did not independently repeat that deployment or installed test.
 This is narrow installed-binary synthetic UI evidence, not proof of a user's
 actual tray click with live settings, successful calendar delivery, reboot or
 host recovery. The real user tray/live-settings retry remains pending.
+
+
+## Fresh validation — 2026-10-16
+
+Fresh offline locked Rust suite PASS (43 tests), all-target Clippy with warnings denied and release packaging PASS. Python migration (2), lifecycle (2), and actions (6) tests passed; installer smoke passed five configurations with repeated installation. Tests use synthetic isolated settings and owned processes. Production calendar bucket contains positive-duration records dated today. Installed executable SHA256 matches the fresh release build. Receipt does not prove source-calendar correctness or every reconciliation scenario. No private feed/config/content was printed or committed; no production restart, UI or reboot was exercised.
