@@ -1,246 +1,68 @@
-# aw-calendar-sync
+# ActivityWatch calendar sync
 
-A Rust iCalendar importer launched by ActivityWatch's tray **Modules** menu.
-It reads one or more published Outlook HTTPS ICS URLs (or local ICS files), checks once
-at startup and then every **60 minutes**, and imports **only completed events
-that started in the last seven days**. This bounded catch-up window covers
-overnight gaps and short outages; unchanged meetings are skipped.
+An AW-managed Windows module that imports completed scheduled events from published Outlook HTTPS iCalendar feeds or local ICS files. Multiple calendars use separate buckets. Scheduled events are context, not proof of attendance or tracked work time.
 
-**Bounded reconciliation:** changed meetings are replaced; cancelled, removed,
-or filtered meetings are deleted within the import window. Older history stays
-untouched. Only this module's dedicated bucket is modified; buckets are never
-deleted. UID plus original recurrence start identifies a meeting. Calendar
-events describe scheduled meetings, not proof of attendance or measured calls.
-Set `reconcile: false` to retain the original append-only behavior.
+## Requirements
 
-No Google account, Microsoft Graph application, Python, Task Scheduler task,
-or separate Windows service is needed. The only outbound request is downloading
-your calendar feed; AW writes are restricted to a loopback HTTP server. Your
-ICS URL stays in a local configuration file and is never sent to AW or logged.
-Attendees are omitted by default; descriptions, locations and meeting links
-are not imported.
+- ActivityWatch with a local server and `aw-qt.exe` module launcher.
+- A direct HTTPS ICS feed or a local UTF-8 ICS file for each calendar.
 
-`excluded_busy_statuses` defaults to `["OOF"]`, excluding out-of-office events
-from new imports. Use `[]` to disable status filtering or add statuses such as
-`FREE` or `TENTATIVE`. Outlook's actual
-`X-MICROSOFT-CDO-BUSYSTATUS:OOF` takes precedence over intended `BUSY`.
-If actual status is absent, intended status is used; recurrence exceptions
-inherit missing status from their series. Explicit non-OOF exceptions remain
-eligible. With reconciliation enabled, existing filtered records within the
-active window are removed on the next successful sync.
+No Microsoft Graph application or separate service is needed. Feed downloads contact their configured servers; activity is stored in local AW. Feed URLs can grant access to private calendars: keep them out of source control and reports. Attendees are off by default; descriptions, locations and meeting links are not imported.
 
-## Build and package
+## Install or upgrade
 
-Requires Rust and the MSVC Windows linker. From this folder:
+Extract `aw-calendar-sync-0.1.0-windows-x64.zip`, close ActivityWatch normally and run from its `aw-calendar-sync` folder:
+
+```powershell
+.\install.ps1 -ActivityWatchDirectory 'C:\path\to\activitywatch'
+```
+
+From source use `./scripts/install.ps1`. The installer preserves settings and existing startup modules, backs up the tray configuration, and adds calendar sync to autostart. Use `-NoAutostart` to preserve the startup list. Keep the matching executable/actions sidecar together when upgrading or rolling back.
+
+Edit the config path printed by the installer, replacing the first calendar's placeholder URL with your direct private feed. Start ActivityWatch normally. **Modules → aw-calendar-sync** controls it; protocol 1 hosts also provide settings/status/log/about actions. See [tray actions](docs/module-actions.md).
+
+## Configuration and everyday use
+
+Default config: `%LOCALAPPDATA%\activitywatch\activitywatch\aw-calendar-sync\config.json`. Profiles use isolated roots. The module reloads settings before each check.
+
+| Setting | Default behavior |
+| --- | --- |
+| `poll_seconds` | `3600`; check at startup and hourly |
+| `lookback_days` | `7`; completed events whose start is within the window |
+| `excluded_busy_statuses` | `["OOF"]`; omit out-of-office events |
+| `reconcile` | `true`; replace changed and remove missing/cancelled/filtered events in the window |
+| `include_attendees` | `false` |
+| `server_url` | `http://127.0.0.1:5600`; loopback only |
+
+Older history is retained. Because reconciliation treats a successfully parsed feed as authoritative within the window, use a complete feed for each source. `reconcile: false` keeps append-only snapshots instead.
+
+Each `calendars` entry needs a stable `calendar_id` and exactly one `calendar_url` or `calendar_file`. Changing an ID creates a different bucket; disabling/removing a source freezes its old history. See [the synthetic config template](config.example.json) and [configuration and migration](docs/CONFIGURATION.md).
+
+New templates use strict custom replay fields plus a readable title; this is not an official AW calendar schema. Older configurations without a mode retain extended behavior. Summary capture is on; additional fields are configurable. See [the data contract](docs/data-contract.md).
+
+## Troubleshooting
+
+- **Unconfigured or invalid settings:** the worker stays available and retries. Validate without network access using `aw-calendar-sync.exe --validate-config`.
+- **No imported events:** future/ongoing events are excluded. Check the lookback window, timezone and status filters. Outages longer than seven days may leave older events unimported.
+- **Feed fails:** use a direct URL; redirects and unsupported recurrence/timezone forms are rejected before writes. Logs omit feed URLs and meeting text.
+- **No chart:** raw `calendar` events do not automatically add a dashboard page or become active work time.
+
+`--dry-run` downloads/parses and reports counts without AW writes. `--once` performs an actual import. See [configuration](docs/CONFIGURATION.md) for these commands, log locations and reconciliation recovery.
+
+## Local development
+
+Requires Rust/MSVC; Python is needed only for auxiliary tests/migration.
 
 ```powershell
 ./scripts/build.ps1 -Test -Package
+python tests/migration.py
+python tests/lifecycle.py
+./tests/install-smoke.ps1
+python tests/actions.py
 ```
 
-The ZIP is `dist/aw-calendar-sync-0.1.0-windows-x64.zip`.
-This is a new implementation, not copied source from `aw-import-ical`.
+[Validation](docs/validation.md) records parser, protocol, migration, isolated lifecycle and installed evidence. Real-host reboot recovery and interactive settings acceptance remain separate checks.
 
-## Install into ActivityWatch
+## License
 
-Exit ActivityWatch before installation. In the source checkout:
-
-```powershell
-./scripts/install.ps1 -ActivityWatchDirectory 'C:\path\to\activitywatch'
-```
-
-Or extract the ZIP, open its `aw-calendar-sync` folder, and run:
-
-```powershell
-./install.ps1 -ActivityWatchDirectory 'C:\path\to\activitywatch'
-```
-
-The supplied directory must contain `aw-qt.exe`. The installer copies the
-executable into `aw-calendar-sync/` beneath that directory and adds
-`aw-calendar-sync` to the existing `autostart_modules` array in `aw-qt.toml`,
-preserving the existing modules. It backs up an existing tray config to
-`aw-qt.toml.before-calendar-sync`. Use `-NoAutostart` to install without changing
-the tray configuration.
-
-Open the config path printed by the installer and replace `calendar_url`
-in the first `calendars` entry with your private, direct Outlook HTTPS ICS link.
-Leave `calendar_file` absent or null for URL sources.
-Do not commit the link or paste it into bug reports. Start ActivityWatch again;
-**Modules → aw-calendar-sync** starts/stops the module.
-An enhanced aw-qt can also show configuration/privacy, status, safe logs and About
-actions from the packaged sidecar. Original trays retain the ordinary toggle.
-See [tray actions and rollback](docs/module-actions.md); no Refresh action is advertised.
-
-On Windows the default config is:
-
-```text
-%LOCALAPPDATA%\activitywatch\activitywatch\aw-calendar-sync\config.json
-```
-
-This matches AW's platformdirs layout. `AW_PROFILE` selects a separate
-`activitywatch-<profile>` root. Logs are under the AW root's
-`Logs/aw-calendar-sync/aw-calendar-sync.log` (rotated after 1 MiB), with counts
-and errors identifying unsupported timezone names without feed URLs or meeting
-details. With an explicit `--config` path, logs stay beside that config. The module reloads
-the config before each check; restart it for immediate changes. Invalid or
-unconfigured settings are retried every minute without exiting, so the module
-can remain managed by AW while you finish setup.
-
-For manual setup, place the executable in the folder described above, run
-`aw-calendar-sync.exe --init-config`, edit the generated config, and add its
-name to `[aw-qt].autostart_modules` through AW's **Open config folder**.
-Checking it in the Modules menu alone starts it for that session; persistent
-startup is controlled by `autostart_modules`.
-
-## Configuration
-
-The module supports multiple calendars in a single configuration. Shared
-settings remain at the top level. Each entry has a stable `calendar_id`, exactly
-one `calendar_url` or `calendar_file`, and optional `enabled` (defaults to true).
-
-```json
-{
-  "poll_seconds": 3600,
-  "lookback_days": 7,
-  "excluded_busy_statuses": ["OOF"],
-  "reconcile": true,
-  "calendars": [
-    {"calendar_id": "outlook-work", "calendar_url": "https://example.invalid/work.ics"},
-    {"calendar_id": "team", "calendar_url": "https://example.invalid/team.ics", "excluded_busy_statuses": ["OOF", "FREE"]}
-  ]
-}
-```
-
-Each calendar uses its own `aw-calendar-sync_<calendar_id>` bucket. Event UIDs
-may overlap across calendars without collision. Keep existing IDs unchanged
-when adding sources; changing an ID creates a new bucket. Entries can override
-`excluded_busy_statuses`, `reconcile`, `lookback_days`, `default_timezone`, and
-`include_attendees`, `payload_mode`, `include_summary`, `include_all_day`, and
-`include_status`; other settings are shared. Polling is hourly by default
-for all enabled calendars. Logs include the source's calendar ID, never its URL.
-
-One feed's download, parse, or AW failure does not stop other valid sources.
-Malformed overall configuration and duplicate IDs stop the cycle before writes.
-`--once` and `--dry-run` attempt all enabled sources and exit nonzero if any fail.
-Disabled or removed sources retain all their AW history: the module does not
-reconcile a bucket whose source is not enabled. Up to 32 configured sources are
-accepted; disable unused entries with `enabled: false`.
-
-The old single-calendar format remains supported. To migrate, move its
-`calendar_id` and source URL/file into the first `calendars` entry; retain all
-other settings at the top level. The optional migration helper does this
-atomically without displaying the URL:
-
-```powershell
-python .\scripts\migrate-config.py 'C:\private\config.json'
-```
-
-The helper needs Python only for migration; the AW module itself does not.
-Use `aw-calendar-sync.exe --validate-config` to check the configuration without
-fetching calendars or connecting to AW.
-Never leave top-level source fields alongside the `calendars` array.
-
-See `config.example.json`. Defaults:
-
-| Setting | Meaning |
-|---|---|
-| `calendars[].calendar_url` / `calendar_file` | Exactly one source; HTTPS feed or local UTF-8 ICS file. Relative files resolve beside the config. |
-| `calendars[].calendar_id` | Unique stable source name and bucket suffix. Keep it unchanged to preserve duplicate detection. |
-| `calendars[].enabled` | true; false suspends this source while preserving its stored history. |
-| `poll_seconds` | 3600; check once per hour while AW and this module are running. |
-| `lookback_days` | Default 7 = bounded catch-up window; 1..7 = rolling days; 0 = strict today from local midnight. Never imports a future or ongoing event. |
-| `server_url` | `http://127.0.0.1:5600`; only loopback origins accepted. |
-| `default_timezone` | `Europe/Prague`; used for today, floating times and date-only events. |
-| `timezone_aliases` | Outlook Windows timezone names mapped to IANA zones. Add mappings if needed. |
-| `payload_mode` | New templates: strict custom replay schema plus workspace title; existing configs without this key: extended, preserving old payloads. No official calendar schema is claimed. |
-| `include_summary` | true; false replaces SUMMARY with the neutral mandatory title. |
-| `include_all_day` / `include_status` | Individually selectable extensions, emitted only in extended mode. Missing flags default true for compatibility. |
-| `include_attendees` | false; opt in to storing nonempty attendee values locally in AW, only in extended mode. |
-| `excluded_busy_statuses` | `["OOF"]`; case-insensitive Outlook show-as statuses to exclude. Empty array disables filtering. Actual status takes precedence over intended status. |
-| `reconcile` | true; replace changed records and remove missing/cancelled/filtered records inside the active window. false retains immutable, append-only snapshots. |
-
-The window includes only complete events whose **start** is within the window
-and whose **end** is no later than the check time. Cross-midnight meetings and
-all-day events won't be imported in today-only mode once their start is before
-today; use the seven-day option if those are required. Nothing already stored
-is pruned as the import window moves forward.
-
-The default seven-day window catches meetings missed before midnight or during
-short shutdowns/server outages. It never expands the calendar's entire recurring
-history; only occurrences in the bounded window are materialized. The entire
-downloaded ICS must still be scanned, since Outlook controls the published feed
-range. An outage longer than seven days can leave older meetings unimported.
-Optional strict today-only mode (`lookback_days: 0`) disables overnight catch-up.
-
-## Verify without writing to AW
-
-```powershell
-.\aw-calendar-sync.exe --dry-run
-.\aw-calendar-sync.exe --once
-.\aw-calendar-sync.exe --config 'C:\private\config.json' --dry-run
-.\aw-calendar-sync.exe --testing --once
-```
-
-`--dry-run` downloads/parses and prints eligible event counts without contacting
-AW. `--once` imports once and returns a nonzero status on failure. `--testing`
-uses port 5666 and, by default, a separate `config-testing.json`. AW passes this
-flag when launching modules in test mode. The default long-running mode retries
-failed cycles after at most 60 seconds; successful cycles keep the hourly cadence.
-It does not download cached
-stale feed data or silently disable TLS certificate checking.
-
-## Parsing and failure behavior
-
-Supports RRULE, RDATE, EXDATE, moved/cancelled RECURRENCE-ID exceptions, sequence
-revisions, folded lines, UTC/IANA/mapped Outlook timezones, floating times,
-all-day events, DTEND and positive DURATION. Recurrences expand with bounded
-iteration. All-day durations preserve local dates across DST.
-
-Custom VTIMEZONE definitions are not interpreted; their TZID must be recognized
-or explicitly mapped. EXRULE, RDATE periods and RANGE=THISANDFUTURE exceptions
-fail with a redacted error, as do unknown timezone names and DST-gap date values.
-No writes occur if parsing fails. HTTP redirects are rejected; use the direct
-Outlook HTTPS feed URL. The feed is capped at 16 MiB and AW responses at 64 MiB.
-
-The adapter reads retained records before each import, including records outside
-the current window, to recognize moved occurrences. It refuses to import if the
-bucket belongs to another client, its schema/source differs, or it contains more
-than 50,000 records. Only the dedicated `aw-calendar-sync_<calendar_id>` bucket
-is used. Another instance using the same config is prevented by a file lock;
-use one AW-managed module/config containing all sources to avoid concurrent inserts.
-
-Replacements are inserted and confirmed before originals are deleted. If a
-reply is lost or a deletion fails, the next check rereads AW and finishes the
-operation without inserting another replacement. An interrupted replacement
-can briefly leave both versions present. Individual DELETE requests are verified
-by reading the event back and requiring 404, or confirming absence in the full
-record list after Rust-server lookup 500; no bucket deletion is implemented.
-The successfully parsed feed is authoritative within the window: missing events
-are removed. Use a complete feed/file for this source, not a partial export.
-
-## Event schema (v1)
-
-Bucket type: `calendar`, client: `aw-calendar-sync`.
-Timestamp is the original scheduled start in UTC; duration is seconds to the
-scheduled end. `data` contains `schema_version`, `calendar_id`, `uid`,
-`occurrence` (original occurrence start, stable for moved meetings), `title`,
-optional `all_day`, `status`, and `attendees`, depending on payload mode/settings.
-The complete [data contract](docs/data-contract.md) documents every field,
-privacy/default/unavailable behavior, migration and ordering limitations.
-There is no official standard `calendar` bucket contract. Strict here means the
-required **custom** replay fields plus workspace `title`; official-only strict
-semantics and dedicated settings selectors remain open requirements. A native
-configuration/privacy JSON editor is now available through the tray actions protocol.
-
-Calendar import adds raw events to AW. It does not add a new dashboard page or
-merge meetings into tracked active time; these are inputs for the planned review
-UI. The library (`src/lib.rs`) provides plain events and append-only planning;
-the AW REST adapter is separate (`src/adapter.rs`).
-
-## Validation
-
-See [validation evidence and remaining requirements](docs/validation.md).
-The Rust suite covers parsing, multi-source isolation, bounded reconciliation,
-uncertain responses, first bucket creation, creation-only 304, genuine failures,
-outage/restart replay, privacy selections and serialization. Python tests cover
-private config migration and isolated executable lifecycle/late-server delivery.
-These checks do not establish installed-host reboot/crash recovery or GUI support.
+[MIT](LICENSE).
