@@ -10,6 +10,7 @@ one `calendar_url` or `calendar_file`, and optional `enabled` (defaults to true)
 {
   "poll_seconds": 3600,
   "lookback_days": 7,
+  "import_scope": "completed",
   "excluded_busy_statuses": ["OOF"],
   "reconcile": true,
   "calendars": [
@@ -24,7 +25,7 @@ may overlap across calendars without collision. Keep existing IDs unchanged
 when adding sources; changing an ID creates a new bucket. Entries can override
 `excluded_busy_statuses`, `reconcile`, `lookback_days`, `default_timezone`, and
 `include_attendees`, `payload_mode`, `include_summary`, `include_all_day`, and
-`include_status`; other settings are shared. Polling is hourly by default
+`include_status`, and `import_scope`; other settings are shared. Polling is hourly by default
 for all enabled calendars. Logs include the source's calendar ID, never its URL.
 
 One feed's download, parse, or AW failure does not stop other valid sources.
@@ -56,7 +57,8 @@ See [config.example.json](../config.example.json). Defaults:
 | `calendars[].calendar_id` | Unique stable source name and bucket suffix. Keep it unchanged to preserve duplicate detection. |
 | `calendars[].enabled` | true; false suspends this source while preserving its stored history. |
 | `poll_seconds` | 3600; check once per hour while AW and this module are running. |
-| `lookback_days` | Default 7 = bounded catch-up window; 1..7 = rolling days; 0 = strict today from local midnight. Never imports a future or ongoing event. |
+| `import_scope` | `completed` (default), `started`, or `current_day`; shared or per-calendar. |
+| `lookback_days` | Default 7 = bounded catch-up window; 1..7 = rolling days; 0 = today from local midnight. Used by completed/started; ignored by current_day. |
 | `server_url` | `http://127.0.0.1:5600`; only loopback origins accepted. |
 | `default_timezone` | `Europe/Prague`; used for today, floating times and date-only events. |
 | `timezone_aliases` | Outlook Windows timezone names mapped to IANA zones. Add mappings if needed. |
@@ -67,11 +69,34 @@ See [config.example.json](../config.example.json). Defaults:
 | `excluded_busy_statuses` | `["OOF"]`; case-insensitive Outlook show-as statuses to exclude. Empty array disables filtering. Actual status takes precedence over intended status. |
 | `reconcile` | true; replace changed records and remove missing/cancelled/filtered records inside the active window. false retains immutable, append-only snapshots. |
 
-The window includes only complete events whose **start** is within the window
-and whose **end** is no later than the check time. Cross-midnight meetings and
-all-day events won't be imported in today-only mode once their start is before
-today; use the seven-day option if those are required. Nothing already stored
-is pruned as the import window moves forward.
+## Import scope
+
+| Value | Included events | Boundaries |
+|---|---|---|
+| `completed` | Backwards, ended events only | Starts within lookback; scheduled end no later than poll time |
+| `started` | Backwards, including currently running | Starts within lookback and no later than poll time; keeps full scheduled end |
+| `current_day` | Whole current day, including future meetings | Starts from local midnight inclusive to next midnight exclusive; keeps full scheduled end |
+
+Use **Settings… → Shared import scope**, then Save. The selector updates the
+top-level `import_scope` key in the editor; overrides inside individual calendars
+remain intact and must be edited there. Manual JSON is also supported, for example
+`"import_scope": "started"`. Missing keys preserve the completed-only default;
+no migration changes existing live choices or silently enables future imports.
+
+All dates use each calendar's `default_timezone`. Current-day boundaries follow
+local DST (23/25-hour days) and ignore `lookback_days`; this scope provides no
+previous-day catch-up. It includes all-day meetings and meetings ending tomorrow
+when they start today, but excludes meetings starting yesterday or next midnight.
+Use a backwards scope with lookback >0 for cross-midnight catch-up.
+
+Running/future intervals represent the **full published schedule**, not elapsed
+time or foreground work. Their duration does not grow each poll. Status filters
+(including OOF), payload privacy, polling and source/bucket identity are unchanged.
+Reconciliation applies to records in the selected scope: edits and cancellations
+can replace/remove running/future intervals when that scope includes them.
+Older/out-of-scope records stay frozen. Switching to a narrower scope does not
+erase previously stored future intervals outside the new scope. Append-only
+`reconcile:false` retains the original snapshots regardless of later feed edits.
 
 The default seven-day window catches meetings missed before midnight or during
 short shutdowns/server outages. It never expands the calendar's entire recurring

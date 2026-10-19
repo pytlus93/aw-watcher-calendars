@@ -1,6 +1,7 @@
 {
   "poll_seconds": 3600,
   "lookback_days": 7,
+  "import_scope": "completed",
   "server_url": "http://127.0.0.1:5600",
   "default_timezone": "Europe/Prague",
   "timezone_aliases": {

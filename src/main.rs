@@ -234,7 +234,7 @@ fn run() -> Result<()> {
         .map_err(|_| "another instance uses this configuration")?;
     log(
         &logpath,
-        "module started; completed events only; bounded reconciliation configured by reconcile",
+        "module started; import scope and bounded reconciliation configured per calendar",
     );
     loop {
         let config = read_config(&path, testing, server.as_deref());

@@ -4,6 +4,11 @@ Follow the latest parent AGENTS.md. This checkout is the AW-managed calendar
 interval importer, not a foreground watcher or standalone service. Do not add
 heartbeat/idle semantics or merge gaps between scheduled events.
 
+`import_scope` defaults to completed; started/current_day explicitly permit full
+scheduled ongoing/future intervals. Apply that policy consistently to parsing,
+reconciliation and transport clock guards. Current-day boundaries are local and
+exclusive at next midnight; backwards scopes retain up to seven days of catch-up.
+
 Use `docs/data-contract.md` and `docs/validation.md` for custom schema, privacy,
 migration and evidence boundaries. Preserve UID/original occurrence identity and
 source/bucket isolation. Validate an entire feed before writes. Confirm replacements

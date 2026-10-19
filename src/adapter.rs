@@ -1,7 +1,7 @@
 //! AW adapter with bounded reconciliation of its own calendar bucket.
 use crate::{
-    parse_calendar, plan_import, plan_reconcile, CalendarEvent, Config, Plan, Result, StoredEvent,
-    Window,
+    parse_calendar, plan_import, plan_reconcile_with_scope, CalendarEvent, Config, ImportScope,
+    Plan, Result, StoredEvent, Window,
 };
 use chrono::Utc;
 use serde_json::{json, Value};
@@ -234,6 +234,7 @@ pub fn synchronize_all(
     })
 }
 pub fn synchronize(config: &Config, window: Window, dry_run: bool) -> Result<Report> {
+    let observed_at = Utc::now();
     config.validate()?;
     let feed = load_feed(config)?;
     let desired = parse_calendar(&feed, config, window)?;
@@ -250,7 +251,7 @@ pub fn synchronize(config: &Config, window: Window, dry_run: bool) -> Result<Rep
     adapter.ensure_bucket()?;
     let records = adapter.records()?;
     if config.reconcile {
-        let plan = plan_reconcile(&desired, &records, window);
+        let plan = plan_reconcile_with_scope(&desired, &records, window, config.import_scope);
         let mut report = Report {
             eligible: desired.len(),
             inserted: 0,
@@ -261,13 +262,22 @@ pub fn synchronize(config: &Config, window: Window, dry_run: bool) -> Result<Rep
         // Confirm every replacement before removing originals. Interrupted runs are
         // recovered by matching the saved replacement and removing duplicates next time.
         for event in &plan.insert {
-            if event.timestamp + chrono::Duration::seconds(event.duration as i64) > Utc::now() {
+            if Utc::now() < observed_at
+                || (config.import_scope == ImportScope::Completed
+                    && event.timestamp + chrono::Duration::seconds(event.duration as i64)
+                        > Utc::now())
+            {
                 return Err("clock moved backwards; reconciliation deferred".into());
             }
             adapter.insert(event)?;
             report.inserted += 1;
         }
-        if !plan.delete.is_empty() && Utc::now() < window.end {
+        let clock_reference = if config.import_scope == ImportScope::CurrentDay {
+            observed_at
+        } else {
+            window.end
+        };
+        if !plan.delete.is_empty() && Utc::now() < clock_reference {
             return Err("clock moved backwards; deletion deferred".into());
         }
         for id in plan.delete {
@@ -290,8 +300,11 @@ pub fn synchronize(config: &Config, window: Window, dry_run: bool) -> Result<Rep
         deleted: 0,
     };
     for event in &insert {
-        // Even if downloading takes time, the fixed captured window never includes future events.
-        if event.timestamp + chrono::Duration::seconds(event.duration as i64) > Utc::now() {
+        // Calendar scope may intentionally include planned time; never extend intervals on retry.
+        if Utc::now() < observed_at
+            || (config.import_scope == ImportScope::Completed
+                && event.timestamp + chrono::Duration::seconds(event.duration as i64) > Utc::now())
+        {
             return Err("clock moved backwards; import deferred".into());
         }
         adapter.insert(event)?;

@@ -77,9 +77,12 @@ timezone labels if a source includes confidential identifiers.
 Disabled extensions never feed titles or logs. Source identity is mandatory and
 is not selectable; this must not be described as metadata-free/title-only capture.
 Changing payload settings affects future syncs. With reconciliation enabled,
-completed records inside the seven-day window are replaced with the selected
+records inside the selected import scope are replaced with the selected
 payload. Older frozen history and append-only mode retain previously stored
 content; this importer does not provide full-history privacy erasure or exports.
+`import_scope` controls eligibility, not payload metadata. Ongoing/future scopes
+keep the published full timestamp/duration; they do not imply elapsed work or
+attendance. See [scope boundaries and reconciliation](CONFIGURATION.md#import-scope).
 
 ## Ordering and display evidence
 

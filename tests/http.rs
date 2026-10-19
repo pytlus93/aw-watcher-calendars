@@ -393,3 +393,39 @@ fn privacy_mode_change_reconciles_saved_payload_and_replays_without_duplicates()
     drop(state);
     std::fs::remove_file(path).unwrap();
 }
+
+#[test]
+fn selected_scopes_insert_replay_replace_and_remove_not_yet_completed_intervals() {
+    use aw_calendar_sync::ImportScope;
+    use chrono::{Duration, Utc};
+    for (scope, name) in [
+        (ImportScope::Started, "running-scope"),
+        (ImportScope::CurrentDay, "day-scope"),
+    ] {
+        let mock = Mock::start();
+        let (mut config, path) = fixture(&mock, name);
+        config.import_scope = scope;
+        config.default_timezone = "UTC".into();
+        let now = Utc::now();
+        let window = config.window(now).unwrap();
+        let start = if scope == ImportScope::Started {
+            now - Duration::minutes(15)
+        } else {
+            window.end - Duration::minutes(1)
+        };
+        let end = start + Duration::hours(1);
+        assert!(end > now);
+        let text=format!("BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:synthetic-scope\r\nSUMMARY:Original\r\nDTSTART:{}\r\nDTEND:{}\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n",start.format("%Y%m%dT%H%M%SZ"),end.format("%Y%m%dT%H%M%SZ"));
+        std::fs::write(&path, &text).unwrap();
+        assert_eq!(synchronize(&config, window, false).unwrap().inserted, 1);
+        assert_eq!(synchronize(&config, window, false).unwrap().unchanged, 1);
+        assert_eq!(mock.state.lock().unwrap().events[0]["duration"], 3600.0);
+        std::fs::write(&path, text.replace("SUMMARY:Original", "SUMMARY:Changed")).unwrap();
+        let changed = synchronize(&config, window, false).unwrap();
+        assert_eq!((changed.inserted, changed.deleted), (1, 1));
+        std::fs::write(&path, "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nEND:VCALENDAR\r\n").unwrap();
+        assert_eq!(synchronize(&config, window, false).unwrap().deleted, 1);
+        assert!(mock.state.lock().unwrap().events.is_empty());
+        std::fs::remove_file(path).unwrap();
+    }
+}

@@ -20,6 +20,14 @@ pub enum PayloadMode {
     Extended,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ImportScope {
+    Completed,
+    Started,
+    CurrentDay,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Config {
@@ -39,6 +47,7 @@ pub struct Config {
     pub reconcile: bool,
     /// 0 = current local calendar day, 1..=7 = rolling days.
     pub lookback_days: u32,
+    pub import_scope: ImportScope,
 }
 impl Default for Config {
     fn default() -> Self {
@@ -73,6 +82,7 @@ impl Default for Config {
             excluded_busy_statuses: vec!["OOF".into()],
             reconcile: true,
             lookback_days: 7,
+            import_scope: ImportScope::Completed,
         }
     }
 }
@@ -163,7 +173,7 @@ impl Config {
         format!("aw-calendar-sync_{}", self.calendar_id)
     }
     pub fn window(&self, now: DateTime<Utc>) -> Result<Window> {
-        let start = if self.lookback_days == 0 {
+        let start = if self.lookback_days == 0 || self.import_scope == ImportScope::CurrentDay {
             let tz = self.timezone(&self.default_timezone)?;
             tz.from_local_datetime(
                 &now.with_timezone(&tz)
@@ -177,7 +187,21 @@ impl Config {
         } else {
             now - Duration::days(self.lookback_days as i64)
         };
-        Ok(Window { start, end: now })
+        let end = if self.import_scope == ImportScope::CurrentDay {
+            let tz = self.timezone(&self.default_timezone)?;
+            let tomorrow = now
+                .with_timezone(&tz)
+                .date_naive()
+                .succ_opt()
+                .ok_or("invalid next local day")?;
+            tz.from_local_datetime(&tomorrow.and_hms_opt(0, 0, 0).unwrap())
+                .earliest()
+                .ok_or("next local midnight does not exist")?
+                .with_timezone(&Utc)
+        } else {
+            now
+        };
+        Ok(Window { start, end })
     }
 }
 
@@ -231,19 +255,33 @@ pub struct ReconcilePlan {
     pub unchanged: usize,
     pub replaced: usize,
 }
-fn within_window(event: &CalendarEvent, window: Window) -> bool {
+fn within_scope(event: &CalendarEvent, window: Window, scope: ImportScope) -> bool {
     event.timestamp >= window.start
-        && event.timestamp <= window.end
+        && if scope == ImportScope::CurrentDay {
+            event.timestamp < window.end
+        } else {
+            event.timestamp <= window.end
+        }
         && event.duration.is_finite()
         && event.duration >= 0.0
         && event.duration <= 366.0 * 86400.0
-        && event.timestamp + Duration::seconds(event.duration as i64) <= window.end
+        && (scope != ImportScope::Completed
+            || event.timestamp + Duration::seconds(event.duration as i64) <= window.end)
 }
 /// Scope destructive actions to completed records within the active window.
 pub fn plan_reconcile(
     desired: &[CalendarEvent],
     existing: &[StoredEvent],
     window: Window,
+) -> ReconcilePlan {
+    plan_reconcile_with_scope(desired, existing, window, ImportScope::Completed)
+}
+
+pub fn plan_reconcile_with_scope(
+    desired: &[CalendarEvent],
+    existing: &[StoredEvent],
+    window: Window,
+    scope: ImportScope,
 ) -> ReconcilePlan {
     let mut plan = ReconcilePlan {
         insert: Vec::new(),
@@ -257,12 +295,15 @@ pub fn plan_reconcile(
     }
     let mut seen = HashSet::new();
     for event in desired {
-        if !seen.insert(event.key()) || !within_window(event, window) {
+        if !seen.insert(event.key()) || !within_scope(event, window, scope) {
             continue;
         }
         let olds = groups.remove(&event.key()).unwrap_or_default();
         // A moved historical occurrence must not rewrite frozen older history.
-        if olds.iter().any(|old| !within_window(&old.event, window)) {
+        if olds
+            .iter()
+            .any(|old| !within_scope(&old.event, window, scope))
+        {
             plan.unchanged += 1;
             continue;
         }
@@ -282,7 +323,7 @@ pub fn plan_reconcile(
         }
     }
     for old in groups.values().flatten() {
-        if within_window(&old.event, window) {
+        if within_scope(&old.event, window, scope) {
             plan.delete.push(old.id);
         }
     }
@@ -501,10 +542,14 @@ fn make_event(
             .ok_or("invalid event end")?
     };
     let utc = start.dt.with_timezone(&Utc);
-    // Only whole, completed events starting in the requested window. Never future/ongoing.
+    // Scope controls start/end eligibility; always retain the full scheduled interval.
     if utc < window.start
-        || utc > window.end
-        || end.with_timezone(&Utc) > window.end
+        || (if config.import_scope == ImportScope::CurrentDay {
+            utc >= window.end
+        } else {
+            utc > window.end
+        })
+        || (config.import_scope == ImportScope::Completed && end.with_timezone(&Utc) > window.end)
         || value(event, "STATUS") == Some("CANCELLED")
     {
         return Ok(None);

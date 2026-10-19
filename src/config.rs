@@ -1,5 +1,5 @@
 //! Multiple sources with shared defaults; legacy single-source JSON remains supported.
-use crate::{Config, PayloadMode, Result};
+use crate::{Config, ImportScope, PayloadMode, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashSet;
@@ -32,6 +32,8 @@ pub struct CalendarSource {
     pub include_status: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub lookback_days: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub import_scope: Option<ImportScope>,
 }
 fn enabled() -> bool {
     true
@@ -112,6 +114,9 @@ impl CalendarSet {
             }
             if let Some(days) = source.lookback_days {
                 config.lookback_days = days;
+            }
+            if let Some(scope) = source.import_scope {
+                config.import_scope = scope;
             }
             if !source.enabled {
                 // An inactive template may have no URL yet. Still validate all shared settings.
