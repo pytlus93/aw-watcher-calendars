@@ -158,3 +158,45 @@ host recovery. The real user tray/live-settings retry remains pending.
 ## Fresh validation — 2026-10-16
 
 Fresh offline locked Rust suite PASS (43 tests), all-target Clippy with warnings denied and release packaging PASS. Python migration (2), lifecycle (2), and actions (6) tests passed; installer smoke passed five configurations with repeated installation. Tests use synthetic isolated settings and owned processes. Production calendar bucket contains positive-duration records dated today. Installed executable SHA256 matches the fresh release build. Receipt does not prove source-calendar correctness or every reconciliation scenario. No private feed/config/content was printed or committed; no production restart, UI or reboot was exercised.
+
+## Selectable import scopes — 2026-10-19
+
+Added `import_scope` with completed (unchanged default), started (including running
+meetings) and current_day (events starting in the whole local day, including
+future meetings). Both backwards scopes retain 0..7-day lookback; current_day
+uses local midnight to exclusive next midnight. Full scheduled durations are
+retained, including meetings crossing midnight; no elapsed work is inferred.
+Reconciliation and clock checks follow the scope, with older/out-of-scope records
+frozen. Shared and per-calendar config overrides are validated before writes.
+
+Local checks PASS: 50 Rust tests; warning-denied all-target clippy; release and ZIP
+packaging; migration (2), lifecycle (2), headless actions (6), native UI (4), and
+installer smoke (five variants, repeated installation plus sidecar rollback).
+The native tests used the previously authorized isolated synthetic settings and
+real Windows controls under hidden-startup protocol context. They selected all
+three dropdown values, checked JSON updates and per-calendar override preservation,
+and saved; earlier visibility, Cancel, invalid-edit and close cases still pass.
+No live config, source, installed executable or running production process was
+changed by the feature implementation. No current-day/future interval was written
+to production AW. Existing settings still default to completed until explicitly
+changed after installing the updated build.
+
+New core/HTTP cases cover completed/running/future filtering, exclusion of next
+midnight, both DST transitions, all-day and recurring events, overnight catch-up,
+OOF filtering, scope migration, replay and actual insert/replace/delete of ongoing
+or future scheduled intervals. This is synthetic protocol evidence, not a new
+live server compatibility or GUI tooltip claim. Hourly polling is unchanged.
+
+### Bodyless existing-bucket regression
+
+`python tests/transport.py` passes two additional real-CLI tests against a
+persistent HTTP/1.1 synthetic server. Bucket POST returns **304, Content-Length:
+67, no body, keep-alive**. The producer finishes without waiting for 67 bytes,
+validates metadata GET, inserts a real calendar interval and confirms it. A fresh
+producer repeats existing-bucket initialization and replays without duplication,
+preserving timestamp and duration. Event POST 304 and incompatible bucket type
+both fail with no insertion; valid initialization subsequently resumes delivery.
+Normal process-exit TCP resets are caught only by this test handler, not ignored
+by production transport. This test uses interval import semantics, not heartbeats.
+The deployed AW implementation's equivalent bodyless response was not exercised;
+a reachable info endpoint alone is not treated as proof of this compatibility.

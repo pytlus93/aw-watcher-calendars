@@ -21,6 +21,9 @@ redacted errors. Disabled optional data must be absent from outgoing payloads.
 Run `cargo test --locked`, `cargo clippy --locked --all-targets -- -D warnings`,
 `./scripts/build.ps1 -Package`, `python tests/migration.py`,
 `python tests/lifecycle.py` (about one minute), and `./tests/install-smoke.ps1`.
+Use `python tests/transport.py` after packaging to verify persistent bodyless
+creation 304 with nonzero Content-Length, producer restart and actual interval
+delivery. Never infer this compatibility from the info endpoint alone.
 The lifecycle harness may kill only child processes it created. Never install
 over or stop live modules for validation without separate user authorization.
 
