@@ -73,6 +73,25 @@ pub fn save_config(path: &Path, text: &str) -> Result<()> {
     result
 }
 
+fn select_scope(text: &str, selection: isize) -> Result<String> {
+    let scope = match selection {
+        0 => "completed",
+        1 => "started",
+        2 => "current_day",
+        _ => return Err("unknown import scope selection".into()),
+    };
+    let mut value: serde_json::Value =
+        serde_json::from_str(text).map_err(|_| "repair the JSON before changing import scope")?;
+    value
+        .as_object_mut()
+        .ok_or("configuration must be an object")?
+        .insert("import_scope".into(), serde_json::json!(scope));
+    let updated =
+        serde_json::to_string_pretty(&value).map_err(|_| "cannot format configuration")?;
+    CalendarSet::from_json(&updated)?;
+    Ok(updated)
+}
+
 fn safe_logs(path: &Path) -> String {
     // Do not display arbitrary historical error text or raw file contents.
     let Ok(file) = fs::File::open(path) else {
@@ -147,11 +166,11 @@ pub fn dispatch(
             })
     };
     let message = match command {
-        "about" => format!("aw-calendar-sync {}\r\nActivityWatch-managed calendar interval importer.\r\nCompleted events only; at most seven days of catch-up.\r\nCalendar intervals are scheduled time, not proof of attendance.\r\nTray actions protocol 1. No refresh IPC is implemented.", env!("CARGO_PKG_VERSION")),
+        "about" => format!("aw-calendar-sync {}\r\nActivityWatch-managed calendar interval importer.\r\nScopes: completed, started, or whole current day.\r\nBackwards scopes support at most seven days of catch-up.\r\nCalendar intervals are scheduled time, not proof of attendance.\r\nTray actions protocol 1. No refresh IPC is implemented.", env!("CARGO_PKG_VERSION")),
         "open-logs" => safe_logs(&log_path),
         "configure" => {
             read_config(path, testing, server)?;
-            format!("Configuration valid: {}\r\nNative configuration editor available without --headless.\r\nControls: payload_mode, include_summary, include_all_day, include_status, include_attendees.\r\nNo feed accessed; no producer started.", path.display())
+            format!("Configuration valid: {}\r\nNative configuration editor available without --headless.\r\nControls: import_scope (completed/started/current_day), payload_mode, include_summary, include_all_day, include_status, include_attendees.\r\nNo feed accessed; no producer started.", path.display())
         }
         "status-ui" => {
             let settings = read_config(path, testing, server)?;
@@ -245,6 +264,7 @@ mod native {
         fn ShowWindow(h: Handle, command: i32) -> i32;
         fn UpdateWindow(h: Handle) -> i32;
         fn SendMessageW(h: Handle, m: u32, w: usize, l: isize) -> isize;
+        fn SetWindowTextW(h: Handle, text: *const u16) -> i32;
     }
     #[link(name = "kernel32")]
     extern "system" {
@@ -272,6 +292,31 @@ mod native {
         Ok(())
     }
     unsafe extern "system" fn callback(h: Handle, m: u32, w: usize, l: isize) -> isize {
+        if m == 0x111 && w & 0xffff == 101 && w >> 16 == 1 {
+            EDITOR.with(|state| {
+                if let Some((_, edit)) = state.borrow().as_ref() {
+                    let length = GetWindowTextLengthW(*edit);
+                    if !(1..=131072).contains(&length) {
+                        return;
+                    }
+                    let mut text = vec![0u16; length as usize + 1];
+                    GetWindowTextW(*edit, text.as_mut_ptr(), length + 1);
+                    let selection = SendMessageW(l as Handle, 0x147, 0, 0);
+                    match select_scope(
+                        &String::from_utf16_lossy(&text[..length as usize]),
+                        selection,
+                    ) {
+                        Ok(updated) => {
+                            SetWindowTextW(*edit, wide(&updated).as_ptr());
+                        }
+                        Err(error) => {
+                            let _ = message_owned(h, &format!("Scope not changed: {error}"));
+                        }
+                    }
+                }
+            });
+            return 0;
+        }
         if m == 0x111 && w & 0xffff == 1 {
             EDITOR.with(|state| {
                 if let Some((path,edit)) = state.borrow().as_ref() {
@@ -338,15 +383,63 @@ mod native {
                 return Err("cannot create configuration window".into());
             }
             CreateWindowExW(0,wide("STATIC").as_ptr(),wide("Edit local JSON. URLs stay private. Privacy: payload_mode (strict/extended), include_summary, include_all_day, include_status, include_attendees. Settings may be overridden per calendar. Older history is preserved.").as_ptr(),0x50000000,12,12,850,52,window,ptr::null_mut(),instance,ptr::null_mut());
+            CreateWindowExW(
+                0,
+                wide("STATIC").as_ptr(),
+                wide("Shared import scope:").as_ptr(),
+                0x50000000,
+                12,
+                68,
+                160,
+                25,
+                window,
+                ptr::null_mut(),
+                instance,
+                ptr::null_mut(),
+            );
+            let scope = CreateWindowExW(
+                0,
+                wide("COMBOBOX").as_ptr(),
+                ptr::null(),
+                0x50210003,
+                180,
+                64,
+                640,
+                180,
+                window,
+                101usize as Handle,
+                instance,
+                ptr::null_mut(),
+            );
+            if scope.is_null() {
+                DestroyWindow(window);
+                return Err("cannot create import scope selector".into());
+            }
+            for label in [
+                "Backwards: completed events only",
+                "Backwards: include currently running events",
+                "Whole current day: include future events",
+            ] {
+                SendMessageW(scope, 0x143, 0, wide(label).as_ptr() as isize);
+            }
+            let selection = serde_json::from_str::<serde_json::Value>(&text)
+                .ok()
+                .map(|v| match v["import_scope"].as_str() {
+                    Some("started") => 1,
+                    Some("current_day") => 2,
+                    _ => 0,
+                })
+                .unwrap_or(0);
+            SendMessageW(scope, 0x14e, selection, 0);
             let edit = CreateWindowExW(
                 0x200,
                 wide("EDIT").as_ptr(),
                 wide(&text).as_ptr(),
                 0x503110c4,
                 12,
-                70,
+                105,
                 850,
-                490,
+                450,
                 window,
                 100usize as Handle,
                 instance,
@@ -403,6 +496,18 @@ mod native {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn scope_selector_updates_shared_setting_without_changing_source_overrides() {
+        let original = r#"{"calendars":[{"calendar_id":"synthetic","calendar_file":"synthetic.ics","import_scope":"completed"}]}"#;
+        for (index, scope) in [(0, "completed"), (1, "started"), (2, "current_day")] {
+            let updated = select_scope(original, index).unwrap();
+            let value: serde_json::Value = serde_json::from_str(&updated).unwrap();
+            assert_eq!(value["import_scope"], scope);
+            assert_eq!(value["calendars"][0]["import_scope"], "completed");
+        }
+        assert!(select_scope("invalid synthetic JSON", 1).is_err());
+        assert!(select_scope(original, 3).is_err());
+    }
     #[test]
     fn invalid_edits_preserve_original_and_valid_edits_replace() {
         let path = std::env::temp_dir().join(format!("calendar-edit-{}.json", std::process::id()));

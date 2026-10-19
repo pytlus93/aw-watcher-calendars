@@ -166,6 +166,29 @@ class NativeConfigurationTests(unittest.TestCase):
         self.assert_clean_exit()
         self.assertEqual(self.config.read_text(), self.original)
 
+    def test_import_scope_selector_changes_shared_json_and_saves(self):
+        editor = self.editor()
+        combo = next(h for h, name, _ in self.windows(editor) if name == "ComboBox")
+        self.assertEqual(user32.SendMessageW(combo, 0x146, 0, 0), 3)
+        self.assertEqual(user32.SendMessageW(combo, 0x147, 0, 0), 0)
+        original = json.loads(self.original)
+        original["calendars"][0]["import_scope"] = "completed"
+        self.set_text(editor, json.dumps(original))
+        edit = next(h for h, name, _ in self.windows(editor) if name == "Edit")
+        def current_config():
+            text = c.create_unicode_buffer(131073)
+            user32.SendMessageW(edit, 0xd, len(text), c.cast(text, c.c_void_p).value)
+            return json.loads(text.value)
+        for selection, scope in [(2, "current_day"), (1, "started"), (0, "completed")]:
+            user32.SendMessageW(combo, 0x14e, selection, 0)
+            self.assertTrue(user32.PostMessageW(editor, 0x111, 101 | (1 << 16), combo))
+            self.wait(lambda: current_config().get("import_scope") == scope, "scope selection applied to JSON")
+            self.assertEqual(current_config()["calendars"][0]["import_scope"], "completed")
+        self.click(editor, "Save")
+        self.dialog(editor, "Saved.")
+        self.assert_clean_exit()
+        self.assertEqual(json.loads(self.config.read_text())["import_scope"], "completed")
+
 
 if __name__ == "__main__":
     unittest.main(argv=[sys.argv[0], *remaining])

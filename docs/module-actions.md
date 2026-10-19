@@ -31,6 +31,22 @@ Malformed configurations can still be opened for repair without contacting AW.
 
 ## Launch context and manual fallback
 
+### Import scope selector
+
+Settings includes **Shared import scope**, a three-choice dropdown:
+backwards completed only, backwards including currently running, or whole current
+local day including future events. Selecting an option updates `import_scope` in
+the JSON editor; Save validates and atomically persists it. Per-calendar overrides
+are preserved and edited inside their entries. See [scope semantics](CONFIGURATION.md#import-scope).
+Manual JSON edits remain authoritative when saved. No selection starts an import;
+the worker reloads settings at its next poll. Default is completed only.
+
+The native regression now selects each option through the real combo control,
+checks generated JSON and per-calendar override preservation, then saves. Existing
+hidden-startup visibility, Cancel, invalid-edit and close regressions still pass.
+
+### Context
+
 With `AW_MODULE_ACTION_PROTOCOL=1`, dispatch consumes and validates
 `AW_MODULE_ACTION`, `AW_TESTING` (`0`/`1`), `AW_PROFILE`, and `AW_SERVER_URL`.
 Action IDs are `configure`, `status`, `logs`, `about`. Profile/config resolution
