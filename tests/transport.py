@@ -9,7 +9,7 @@ import tempfile
 import threading
 import unittest
 
-EXE = Path(__file__).parents[1] / "target/release/aw-calendar-sync.exe"
+EXE = Path(__file__).parents[1] / "target/release/aw-watcher-calendars.exe"
 
 
 class TransportTests(unittest.TestCase):
@@ -50,7 +50,7 @@ class TransportTests(unittest.TestCase):
                     state["race"] = False
                     self.reply(404, {})
                 else:
-                    self.reply(200, {"client": "aw-calendar-sync", "type": "afkstatus" if state["wrong_type"] else "calendar"})
+                    self.reply(200, {"client": "aw-watcher-calendars", "type": "afkstatus" if state["wrong_type"] else "calendar"})
             def do_POST(self):
                 body = self.rfile.read(int(self.headers["Content-Length"]))
                 if "/events" in self.path:
@@ -76,10 +76,16 @@ class TransportTests(unittest.TestCase):
         self.worker.join(timeout=5)
         self.folder.cleanup()
 
-    def run_import(self):
+    def run_import(self, extra=()):
         env = {k:v for k,v in os.environ.items() if k not in ["AW_MODULE_ACTION_PROTOCOL", "AW_MODULE_ACTION", "AW_TESTING", "AW_SERVER_URL"]}
-        return subprocess.run([str(EXE), "--config", str(self.config), "--once"], env=env,
+        return subprocess.run([str(EXE), "--config", str(self.config), "--once", *extra], env=env,
                               capture_output=True, timeout=5)
+
+    def test_explicit_port_overrides_testing_and_server_url_for_actual_import(self):
+        result = self.run_import(("--testing", "--server-url", "http://127.0.0.1:1",
+                                  "--port", str(self.server.server_port)))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(len(self.state["events"]), 1)
 
     def test_bodyless_creation_304_with_length_67_restarts_and_delivers(self):
         self.assertEqual(self.run_import().returncode, 0)

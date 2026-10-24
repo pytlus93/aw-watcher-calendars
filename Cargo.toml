@@ -1,8 +1,8 @@
 [package]
-name = "aw-calendar-sync"
-version = "0.1.0"
+name = "aw-watcher-calendars"
+version = "1.0.0"
 edition = "2021"
-description = "Append-only Outlook iCalendar importer managed by ActivityWatch"
+description = "Scheduled calendar context importer managed by ActivityWatch"
 license = "MIT"
 
 [dependencies]

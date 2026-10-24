@@ -1,4 +1,4 @@
-use aw_calendar_sync::{adapter::synchronize_all, config::CalendarSet, Config};
+use aw_watcher_calendars::{adapter::synchronize_all, config::CalendarSet, Config};
 use chrono::{Duration, Utc};
 use serde_json::json;
 use std::{fs, process::Command};
@@ -9,12 +9,12 @@ fn legacy_source_and_new_template_preserve_bucket_identity() {
     let set = CalendarSet::from_json(legacy).unwrap();
     assert_eq!(
         set.calendars[0].bucket_id(),
-        "aw-calendar-sync_outlook-work"
+        "aw-watcher-calendars_outlook-work"
     );
     let set = CalendarSet::from_json(&CalendarSet::template(false).to_string()).unwrap();
     assert_eq!(
         set.calendars[0].bucket_id(),
-        "aw-calendar-sync_outlook-work"
+        "aw-watcher-calendars_outlook-work"
     );
     assert_eq!(set.poll_seconds, 3600);
 }
@@ -92,7 +92,7 @@ fn failed_source_does_not_stop_other_sources_or_leak_calendar_content() {
         .to_string(),
     )
     .unwrap();
-    let validation = Command::new(env!("CARGO_BIN_EXE_aw-calendar-sync"))
+    let validation = Command::new(env!("CARGO_BIN_EXE_aw-watcher-calendars"))
         .args(["--config", config.to_str().unwrap(), "--validate-config"])
         .output()
         .unwrap();
@@ -101,7 +101,7 @@ fn failed_source_does_not_stop_other_sources_or_leak_calendar_content() {
         .unwrap()
         .contains("2 calendars enabled"));
     assert!(!root.join("config.log").exists());
-    let output = Command::new(env!("CARGO_BIN_EXE_aw-calendar-sync"))
+    let output = Command::new(env!("CARGO_BIN_EXE_aw-watcher-calendars"))
         .args(["--config", config.to_str().unwrap(), "--dry-run"])
         .output()
         .unwrap();

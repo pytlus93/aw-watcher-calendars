@@ -11,7 +11,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import threading
 
 ROOT = Path(__file__).parents[1]
-EXE = ROOT / "target/release/aw-calendar-sync.exe"
+EXE = ROOT / "target/release/aw-watcher-calendars.exe"
 
 
 class ActionsTests(unittest.TestCase):
@@ -51,7 +51,7 @@ class ActionsTests(unittest.TestCase):
                "AW_TESTING": "1", "AW_PROFILE": "synthetic-test", "AW_SERVER_URL": "http://127.0.0.1:59999"}
         result = self.run_action("configure", env=env, explicit=False)
         self.assertEqual(result.returncode, 0, result.stderr)
-        expected = self.root / "appdata/activitywatch-synthetic-test/activitywatch-synthetic-test/aw-calendar-sync/config-testing.json"
+        expected = self.root / "appdata/activitywatch-synthetic-test/activitywatch-synthetic-test/aw-watcher-calendars/config-testing.json"
         self.assertTrue(expected.exists())
         self.assertIn(str(expected), result.stdout)
         manual = {**self.env, "AW_PROFILE": "synthetic-test"}
@@ -91,6 +91,10 @@ class ActionsTests(unittest.TestCase):
         for secret in ["private-id", "secret-topic", "https://", "attendee@example.invalid"]:
             self.assertNotIn(secret, result.stdout + result.stderr)
 
+    def test_invalid_ports_are_rejected_without_ui(self):
+        for port in ["0", "65536", "bad", "-1"]:
+            self.assertNotEqual(self.run_action("about", extra=("--port", port)).returncode, 0)
+
     def test_status_consumes_server_context_and_reports_unavailability(self):
         requests = []
         class Handler(BaseHTTPRequestHandler):
@@ -112,11 +116,16 @@ class ActionsTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0)
             self.assertIn("reachable; valid info response", result.stdout)
             self.assertEqual(requests, ["/api/0/info"])
+            via_port = self.run_action("status-ui", extra=("--port", str(server.server_port)),
+                                       env={**env, "AW_SERVER_URL": "http://127.0.0.1:1"})
+            self.assertEqual(via_port.returncode, 0, via_port.stderr)
+            self.assertIn("reachable; valid info response", via_port.stdout)
+            self.assertEqual(requests, ["/api/0/info", "/api/0/info"])
             self.config.write_text(json.dumps({"server_url": env["AW_SERVER_URL"],
                 "calendars": [{"calendar_id": "synthetic", "enabled": False}]}))
             manual = self.run_action("status-ui")
             self.assertIn("reachable; valid info response", manual.stdout)
-            self.assertEqual(requests, ["/api/0/info", "/api/0/info"])
+            self.assertEqual(requests, ["/api/0/info", "/api/0/info", "/api/0/info"])
         finally:
             server.shutdown()
             server.server_close()
@@ -128,18 +137,18 @@ class ActionsTests(unittest.TestCase):
         self.assertFalse(self.config.with_suffix(".lock").exists())
 
     def test_manifest_build_and_zip_match_executable_commands(self):
-        manifest_path = ROOT / "aw-calendar-sync.exe.actions.json"
+        manifest_path = ROOT / "aw-watcher-calendars.exe.actions.json"
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         self.assertEqual(manifest["schema_version"], 1)
-        self.assertEqual(manifest["module"], "aw-calendar-sync")
+        self.assertEqual(manifest["module"], "aw-watcher-calendars")
         self.assertEqual(len(manifest["actions"]), 4)
         self.assertEqual(manifest_path.read_bytes(), Path(str(EXE) + ".actions.json").read_bytes())
         for action in manifest["actions"]:
             env = {**self.env, "AW_MODULE_ACTION_PROTOCOL": "1", "AW_MODULE_ACTION": action["id"],
                    "AW_TESTING": "0", "AW_SERVER_URL": "http://127.0.0.1:59999"}
             self.assertEqual(self.run_action(action["args"][0], env=env).returncode, 0)
-        with zipfile.ZipFile(ROOT / "dist/aw-calendar-sync-0.1.0-windows-x64.zip") as archive:
-            self.assertEqual(archive.read("aw-calendar-sync/aw-calendar-sync.exe.actions.json"), manifest_path.read_bytes())
+        with zipfile.ZipFile(ROOT / "dist/aw-watcher-calendars-1.0.0-windows-x64.zip") as archive:
+            self.assertEqual(archive.read("aw-watcher-calendars/aw-watcher-calendars.exe.actions.json"), manifest_path.read_bytes())
 
 
 if __name__ == "__main__":

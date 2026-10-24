@@ -16,7 +16,7 @@ import time
 import unittest
 
 parser = argparse.ArgumentParser(add_help=False)
-parser.add_argument("--exe", type=Path, default=Path(__file__).parents[1] / "target/release/aw-calendar-sync.exe")
+parser.add_argument("--exe", type=Path, default=Path(__file__).parents[1] / "target/release/aw-watcher-calendars.exe")
 options, remaining = parser.parse_known_args()
 EXE = options.exe.resolve()
 
@@ -45,7 +45,7 @@ class NativeConfigurationTests(unittest.TestCase):
     def setUp(self):
         self.folder = tempfile.TemporaryDirectory(prefix="calendar-native-ui-")
         self.root = Path(self.folder.name)
-        self.config = self.root / "activitywatch-synthetic-ui/activitywatch-synthetic-ui/aw-calendar-sync/config-testing.json"
+        self.config = self.root / "activitywatch-synthetic-ui/activitywatch-synthetic-ui/aw-watcher-calendars/config-testing.json"
         self.config.parent.mkdir(parents=True)
         self.original = json.dumps({"calendars": [{"calendar_id": "synthetic", "enabled": False}]})
         self.config.write_text(self.original)

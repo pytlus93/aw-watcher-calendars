@@ -1,4 +1,4 @@
-use aw_calendar_sync::{adapter::synchronize, Config, Window};
+use aw_watcher_calendars::{adapter::synchronize, Config, Window};
 use serde_json::{json, Value};
 use std::{
     io::{BufRead, BufReader, Read, Write},
@@ -100,7 +100,7 @@ impl Mock {
                         }
                     }
                     ("GET", false) if !state.bucket => (404, json!({})),
-                    ("GET", false) => (200, json!({"client":"aw-calendar-sync","type":"calendar"})),
+                    ("GET", false) => (200, json!({"client":"aw-watcher-calendars","type":"calendar"})),
                     ("POST", false) => {
                         state.bucket = true;
                         (200, json!({}))
@@ -168,7 +168,7 @@ fn window() -> Window {
 }
 fn fixture(mock: &Mock, name: &str) -> (Config, std::path::PathBuf) {
     let path = std::env::temp_dir().join(format!(
-        "aw-calendar-sync-{}-{name}.ics",
+        "aw-watcher-calendars-{}-{name}.ics",
         std::process::id()
     ));
     let config = Config {
@@ -372,7 +372,7 @@ fn privacy_mode_change_reconciles_saved_payload_and_replays_without_duplicates()
     assert!(mock.state.lock().unwrap().events[0]["data"]
         .get("attendees")
         .is_some());
-    config.payload_mode = aw_calendar_sync::PayloadMode::Strict;
+    config.payload_mode = aw_watcher_calendars::PayloadMode::Strict;
     config.include_summary = false;
     let report = synchronize(&config, window(), false).unwrap();
     assert_eq!(report.inserted, 1);
@@ -396,7 +396,7 @@ fn privacy_mode_change_reconciles_saved_payload_and_replays_without_duplicates()
 
 #[test]
 fn selected_scopes_insert_replay_replace_and_remove_not_yet_completed_intervals() {
-    use aw_calendar_sync::ImportScope;
+    use aw_watcher_calendars::ImportScope;
     use chrono::{Duration, Utc};
     for (scope, name) in [
         (ImportScope::Started, "running-scope"),

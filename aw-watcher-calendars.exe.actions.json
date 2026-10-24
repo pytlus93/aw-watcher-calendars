@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "module": "aw-calendar-sync",
+  "module": "aw-watcher-calendars",
   "actions": [
     {
       "id": "configure",

@@ -1,5 +1,51 @@
 # Validation evidence — 2026-10-11
 
+## Release 1.0.0 and full identity rename — 2026-10-24
+
+The repository, Cargo crate, executable/actions sidecar, module/client ID,
+settings/log directories, generated bucket prefix and installer are now
+`aw-watcher-calendars`. Runtime Rust crate references use `aw_watcher_calendars`.
+Old names remain only in the explicit manual rename guide; no compatibility alias
+or automatic history migration is implemented. Existing live files/configs,
+autostart entries and recorded buckets were not modified. See RENAMING.md.
+
+Rust 1.99.0 x86_64-pc-windows-msvc `scripts/build.ps1 -Test -Package` passes:
+50 Rust tests, locked all-target Clippy with warnings denied, release build and
+Windows x64 ZIP. Cargo.lock changes only package name/version. The previous
+partial-rename build was superseded and the complete suite rerun under the final
+crate/executable/module identity. Some earlier runs emitted incremental-cache
+permission notes without failing; no compiler warning is hidden by those notes.
+
+Auxiliary checks pass with the renamed executable: migration.py (2), lifecycle.py
+(2), actions.py (7), transport.py (3) and install-smoke.ps1 (five configurations,
+repeated installation/preservation and sidecar rollback). The lifecycle run takes
+about a minute and terminates only its own child processes. Headless action checks
+verify new config/log/module paths and reject invalid CLI ports without UI.
+
+The new --port flag is tested in actual interval import and status/info requests,
+overriding testing defaults, saved endpoints and CLI/action server origins while
+retaining the selected loopback host. It does not rewrite settings or infer a
+testing profile from a port. Help/version, package names, installer and sidecar
+use the new identity. HTTP User-Agent now derives from Cargo name/version.
+
+Persistent HTTP/1.1 tests return creation-only bodyless 304, Content-Length: 67,
+keep-alive; new producer processes initialize, validate metadata, deliver actual
+scheduled intervals and replay without duplication. Event-endpoint 304 and
+incompatible metadata fail; subsequent valid initialization resumes import.
+These are interval-import tests, not heartbeat or attention tests.
+
+UID/occurrence logic, source isolation, privacy defaults, recurrence/timezone/OOF
+handling and completed/started/current-day scope/reconciliation behavior remain.
+The renamed bucket namespace is intentionally new; historical old-name buckets
+are untouched and cross-namespace migration/deduplication is not claimed.
+
+The package is cleanly staged, includes README/changelog/license, the exact actions
+sidecar, installer, config template, migration helper and component docs, and has a
+SHA256 sidecar. Repository visibility remains private; no push or publication was
+performed. No private feed, live calendar data, installed module, production AW
+process or history was accessed/changed. Native UI was not opened for this run;
+live host/reboot acceptance and actual deployed-AW compatibility remain separate.
+
 Scope: calendar module only, against the current parent AGENTS.md. Shared root
 documentation, live executables/configs and production calendar events were not
 changed. No live watchers were killed, no replacement was installed, no interactive

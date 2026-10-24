@@ -1,11 +1,11 @@
-use aw_calendar_sync::{parse_calendar, plan_reconcile, Config, StoredEvent, Window};
+use aw_watcher_calendars::{parse_calendar, plan_reconcile, Config, StoredEvent, Window};
 fn window() -> Window {
     Window {
         start: "2026-10-05T00:00:00Z".parse().unwrap(),
         end: "2026-10-05T12:00:00Z".parse().unwrap(),
     }
 }
-fn event() -> aw_calendar_sync::CalendarEvent {
+fn event() -> aw_watcher_calendars::CalendarEvent {
     let feed="BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:synthetic\r\nSUMMARY:Original\r\nDTSTART:20261005T090000Z\r\nDTEND:20261005T100000Z\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
     parse_calendar(feed, &Config::default(), window())
         .unwrap()

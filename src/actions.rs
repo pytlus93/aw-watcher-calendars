@@ -17,10 +17,10 @@ pub fn record_action(path: &Path, testing: bool, custom: bool, command: &str, su
     let log_path = if custom {
         path.with_extension("actions.log")
     } else if let Some(root) = path.parent().and_then(Path::parent) {
-        root.join("Logs/aw-calendar-sync").join(if testing {
-            "aw-calendar-sync-testing-actions.log"
+        root.join("Logs/aw-watcher-calendars").join(if testing {
+            "aw-watcher-calendars-testing-actions.log"
         } else {
-            "aw-calendar-sync-actions.log"
+            "aw-watcher-calendars-actions.log"
         })
     } else {
         return;
@@ -158,15 +158,15 @@ pub fn dispatch(
         path.parent()
             .and_then(Path::parent)
             .ok_or("invalid config location")?
-            .join("Logs/aw-calendar-sync")
+            .join("Logs/aw-watcher-calendars")
             .join(if testing {
-                "aw-calendar-sync-testing.log"
+                "aw-watcher-calendars-testing.log"
             } else {
-                "aw-calendar-sync.log"
+                "aw-watcher-calendars.log"
             })
     };
     let message = match command {
-        "about" => format!("aw-calendar-sync {}\r\nActivityWatch-managed calendar interval importer.\r\nScopes: completed, started, or whole current day.\r\nBackwards scopes support at most seven days of catch-up.\r\nCalendar intervals are scheduled time, not proof of attendance.\r\nTray actions protocol 1. No refresh IPC is implemented.", env!("CARGO_PKG_VERSION")),
+        "about" => format!("aw-watcher-calendars {}\r\nActivityWatch-managed calendar interval importer.\r\nScopes: completed, started, or whole current day.\r\nBackwards scopes support at most seven days of catch-up.\r\nCalendar intervals are scheduled time, not proof of attendance.\r\nTray actions protocol 1. No refresh IPC is implemented.", env!("CARGO_PKG_VERSION")),
         "open-logs" => safe_logs(&log_path),
         "configure" => {
             read_config(path, testing, server)?;
@@ -282,7 +282,7 @@ mod native {
             if MessageBoxW(
                 owner,
                 wide(text).as_ptr(),
-                wide("Calendar sync").as_ptr(),
+                wide("ActivityWatch calendars").as_ptr(),
                 0,
             ) == 0
             {

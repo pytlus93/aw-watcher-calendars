@@ -170,7 +170,7 @@ impl Config {
         Ok(())
     }
     pub fn bucket_id(&self) -> String {
-        format!("aw-calendar-sync_{}", self.calendar_id)
+        format!("aw-watcher-calendars_{}", self.calendar_id)
     }
     pub fn window(&self, now: DateTime<Utc>) -> Result<Window> {
         let start = if self.lookback_days == 0 || self.import_scope == ImportScope::CurrentDay {

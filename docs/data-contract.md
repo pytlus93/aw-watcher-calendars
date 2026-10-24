@@ -1,11 +1,17 @@
 # Calendar data contract
 
+Release 1.0.0 uses `aw-watcher-calendars` for executable/module/client identity,
+settings/log paths and generated bucket prefixes. Historical buckets are not moved
+or rewritten. UID/original-occurrence identity and scheduled interval semantics
+are unchanged inside each source bucket. `--port` adds an endpoint override without
+enabling additional data fields or changing privacy defaults.
+
 ## Official AW contract and this module's custom schema
 
 The [AW data model](https://docs.activitywatch.net/en/latest/buckets-and-events.html)
 requires event `timestamp` (RFC 3339 UTC), `duration` (seconds) and object `data`.
 The documented standard bucket types do **not** include a calendar schema.
-`calendar`, client `aw-calendar-sync`, is this module's custom type. Do not call
+`calendar`, client `aw-watcher-calendars`, is this module's custom type. Do not call
 its identity properties official AW standard fields or infer dashboard support.
 Events describe scheduled calendar intervals, not measured foreground work,
 attendance or calls. Foreground/idle gating would discard valid imported history

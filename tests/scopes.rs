@@ -1,4 +1,4 @@
-use aw_calendar_sync::{
+use aw_watcher_calendars::{
     config::CalendarSet, parse_calendar, plan_reconcile_with_scope, Config, ImportScope,
     StoredEvent,
 };

@@ -1,4 +1,4 @@
-use aw_calendar_sync::{adapter::synchronize_all, config::CalendarSet, Result};
+use aw_watcher_calendars::{adapter::synchronize_all, config::CalendarSet, Result};
 mod actions;
 use chrono::Utc;
 use fs2::FileExt;
@@ -11,13 +11,14 @@ use std::{
 };
 
 const HELP: &str =
-    "aw-calendar-sync [--config PATH] [--testing] [--once | --dry-run | --init-config]\n\
+    "aw-watcher-calendars [--config PATH] [--testing] [--once | --dry-run | --init-config]\n\
 Default: stay running, import completed events from the last 7 days every 60 minutes.\n\
 --once         Run one import and exit (nonzero on failure).\n\
 --dry-run      Download/parse/count eligible events, without connecting to AW.\n\
 --init-config  Create a template if absent, print its path, and exit.\n\
 --validate-config Check configuration without fetching calendars or connecting to AW.\n\
 --testing      Use port 5666 and a separate default config.\n\
+--port PORT    Override the local AW port (1–65535), including for actions.\n\
 configure | status-ui | open-logs | about  Run a short-lived tray action.\n\
 --headless     Print action reports without opening native UI.\n\
 --server-url URL Override the loopback AW origin, including for actions.\n\
@@ -47,7 +48,7 @@ fn default_config(testing: bool) -> Result<PathBuf> {
             PathBuf::from(std::env::var_os("HOME").unwrap_or_default()).join(".config")
         })
         .join(&app);
-    Ok(base.join("aw-calendar-sync").join(if testing {
+    Ok(base.join("aw-watcher-calendars").join(if testing {
         "config-testing.json"
     } else {
         "config.json"
@@ -120,6 +121,7 @@ fn run() -> Result<()> {
     let mut action = None;
     let mut headless = false;
     let mut server = None;
+    let mut port = None;
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--help" | "-h" => {
@@ -127,11 +129,20 @@ fn run() -> Result<()> {
                 return Ok(());
             }
             "--version" => {
-                println!("aw-calendar-sync {}", env!("CARGO_PKG_VERSION"));
+                println!("aw-watcher-calendars {}", env!("CARGO_PKG_VERSION"));
                 return Ok(());
             }
             "--config" => path = Some(PathBuf::from(args.next().ok_or("--config needs a path")?)),
             "--testing" => testing = true,
+            "--port" => {
+                let value = args.next().ok_or("--port needs a value")?;
+                let value = value
+                    .parse::<u16>()
+                    .ok()
+                    .filter(|p| *p > 0)
+                    .ok_or("port must be 1–65535")?;
+                port = Some(value);
+            }
             "--server-url" => server = Some(args.next().ok_or("--server-url needs a value")?),
             "--headless" => headless = true,
             "configure" | "status-ui" | "open-logs" | "about" => {
@@ -172,8 +183,17 @@ fn run() -> Result<()> {
     if (headless && action.is_none()) || (action.is_some() && (once || dry || init || validate)) {
         return Err("action options cannot be combined with producer commands".into());
     }
+    if let Some(port) = port {
+        let fallback = format!("http://127.0.0.1:{}", if testing { 5666 } else { 5600 });
+        let mut origin = url::Url::parse(server.as_deref().unwrap_or(&fallback))
+            .map_err(|_| "invalid server origin")?;
+        origin
+            .set_port(Some(port))
+            .map_err(|_| "cannot set server port")?;
+        server = Some(origin.to_string());
+    }
     if let Some(server) = &server {
-        let check = aw_calendar_sync::Config {
+        let check = aw_watcher_calendars::Config {
             calendar_file: Some("context-validation.ics".into()),
             server_url: server.clone(),
             ..Default::default()
@@ -214,12 +234,12 @@ fn run() -> Result<()> {
             .parent()
             .and_then(Path::parent)
             .ok_or("invalid config location")?;
-        let dir = root.join("Logs").join("aw-calendar-sync");
+        let dir = root.join("Logs").join("aw-watcher-calendars");
         fs::create_dir_all(&dir).map_err(|_| "cannot create log directory")?;
         dir.join(if testing {
-            "aw-calendar-sync-testing.log"
+            "aw-watcher-calendars-testing.log"
         } else {
-            "aw-calendar-sync.log"
+            "aw-watcher-calendars.log"
         })
     };
     let lockpath = path.with_extension("lock");

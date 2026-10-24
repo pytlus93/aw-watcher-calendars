@@ -20,7 +20,7 @@ one `calendar_url` or `calendar_file`, and optional `enabled` (defaults to true)
 }
 ```
 
-Each calendar uses its own `aw-calendar-sync_<calendar_id>` bucket. Event UIDs
+Each calendar uses its own `aw-watcher-calendars_<calendar_id>` bucket. Event UIDs
 may overlap across calendars without collision. Keep existing IDs unchanged
 when adding sources; changing an ID creates a new bucket. Entries can override
 `excluded_busy_statuses`, `reconcile`, `lookback_days`, `default_timezone`, and
@@ -45,7 +45,7 @@ python .\scripts\migrate-config.py 'C:\private\config.json'
 ```
 
 The helper needs Python only for migration; the AW module itself does not.
-Use `aw-calendar-sync.exe --validate-config` to check the configuration without
+Use `aw-watcher-calendars.exe --validate-config` to check the configuration without
 fetching calendars or connecting to AW.
 Never leave top-level source fields alongside the `calendars` array.
 
@@ -108,10 +108,10 @@ Optional strict today-only mode (`lookback_days: 0`) disables overnight catch-up
 ## Validation and one-shot commands
 
 ```powershell
-.\aw-calendar-sync.exe --dry-run
-.\aw-calendar-sync.exe --once
-.\aw-calendar-sync.exe --config 'C:\private\config.json' --dry-run
-.\aw-calendar-sync.exe --testing --once
+.\aw-watcher-calendars.exe --dry-run
+.\aw-watcher-calendars.exe --once
+.\aw-watcher-calendars.exe --config 'C:\private\config.json' --dry-run
+.\aw-watcher-calendars.exe --testing --once
 ```
 
 `--dry-run` downloads/parses and prints eligible event counts without contacting
@@ -138,7 +138,7 @@ Outlook HTTPS feed URL. The feed is capped at 16 MiB and AW responses at 64 MiB.
 The adapter reads retained records before each import, including records outside
 the current window, to recognize moved occurrences. It refuses to import if the
 bucket belongs to another client, its schema/source differs, or it contains more
-than 50,000 records. Only the dedicated `aw-calendar-sync_<calendar_id>` bucket
+than 50,000 records. Only the dedicated `aw-watcher-calendars_<calendar_id>` bucket
 is used. Another instance using the same config is prevented by a file lock;
 use one AW-managed module/config containing all sources to avoid concurrent inserts.
 
@@ -153,7 +153,7 @@ are removed. Use a complete feed/file for this source, not a partial export.
 
 ## Event schema (v1)
 
-Bucket type: `calendar`, client: `aw-calendar-sync`.
+Bucket type: `calendar`, client: `aw-watcher-calendars`.
 Timestamp is the original scheduled start in UTC; duration is seconds to the
 scheduled end. `data` contains `schema_version`, `calendar_id`, `uid`,
 `occurrence` (original occurrence start, stable for moved meetings), `title`,

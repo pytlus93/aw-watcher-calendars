@@ -1,6 +1,6 @@
 # AW tray actions protocol 1
 
-This module packages `aw-calendar-sync.exe.actions.json` beside the executable.
+This module packages `aw-watcher-calendars.exe.actions.json` beside the executable.
 An enhanced aw-qt reads it and displays the following submenu. An original tray
 ignores it and retains the usual checkable module entry. Neither AW server needs
 modification. aw-tauri does not currently consume this protocol.
@@ -51,7 +51,7 @@ With `AW_MODULE_ACTION_PROTOCOL=1`, dispatch consumes and validates
 `AW_MODULE_ACTION`, `AW_TESTING` (`0`/`1`), `AW_PROFILE`, and `AW_SERVER_URL`.
 Action IDs are `configure`, `status`, `logs`, `about`. Profile/config resolution
 is shared with producer startup. Named profiles use
-`%LOCALAPPDATA%/activitywatch-<profile>/activitywatch-<profile>/aw-calendar-sync/`;
+`%LOCALAPPDATA%/activitywatch-<profile>/activitywatch-<profile>/aw-watcher-calendars/`;
 testing selects `config-testing.json` and the corresponding testing log.
 Absent/default profile uses the original activitywatch root.
 
@@ -61,13 +61,17 @@ then testing/default configuration determines the server. Server origins remain
 loopback HTTP only, with proxy/redirects disabled. Normal legacy producer commands
 remain compatible; protocol context cannot fall through into the producer loop.
 
+`--port <port>` (1–65535) takes precedence over those endpoint ports for both
+actions and imports. Without a CLI/action server URL it selects 127.0.0.1 at the
+requested port. It does not change testing/profile selection or saved settings.
+
 One-line manual examples (run the module executable in its installation folder):
 
 ```powershell
-./aw-calendar-sync.exe configure
-./aw-calendar-sync.exe status-ui --testing
-./aw-calendar-sync.exe open-logs
-./aw-calendar-sync.exe about
+./aw-watcher-calendars.exe configure
+./aw-watcher-calendars.exe status-ui --testing
+./aw-watcher-calendars.exe open-logs
+./aw-watcher-calendars.exe about
 ```
 
 `--headless` is an action-only validation/manual-report option: configure validates
@@ -80,8 +84,8 @@ Connection reachability is not proof of a feed being accessible, latest sync
 success, attendance, or producer liveness. Recent log entries can be old; their
 timestamps are shown and no current-running state is inferred. A successful status
 helper exit means the report was displayed, even if it reports AW unavailable.
-Action completion is recorded separately in `aw-calendar-sync-actions.log`
-(testing: `aw-calendar-sync-testing-actions.log`) under the same AW log folder.
+Action completion is recorded separately in `aw-watcher-calendars-actions.log`
+(testing: `aw-watcher-calendars-testing-actions.log`) under the same AW log folder.
 Explicit config paths use a neighboring `.actions.log`. These rotating logs contain
 only timestamps, fixed action IDs and completion booleans; no args/config/errors.
 
@@ -96,7 +100,7 @@ sidecar**, if present. Install using the existing one-line `install.ps1` command
 For rollback, restore the pair from the same version. Running the installer with
 an older executable that has no adjacent `.actions.json` automatically removes
 the installed stale sidecar. Manual rollback to a version without action commands
-must likewise remove only `aw-calendar-sync.exe.actions.json`. Do not delete local
+must likewise remove only `aw-watcher-calendars.exe.actions.json`. Do not delete local
 configuration, logs, buckets or stored history. This task performed no deployment.
 
 ## Local validation and limits

@@ -1,4 +1,4 @@
-use aw_calendar_sync::{parse_calendar, plan_import, Config, Window};
+use aw_watcher_calendars::{parse_calendar, plan_import, Config, Window};
 use chrono::{DateTime, Utc};
 fn utc(s: &str) -> DateTime<Utc> {
     s.parse().unwrap()

@@ -10,7 +10,7 @@ import threading
 import time
 import unittest
 
-EXE = Path(__file__).parents[1] / "target/release/aw-calendar-sync.exe"
+EXE = Path(__file__).parents[1] / "target/release/aw-watcher-calendars.exe"
 
 
 class LifecycleTests(unittest.TestCase):
@@ -95,7 +95,7 @@ class LifecycleTests(unittest.TestCase):
                 if "/events" in self.path:
                     self.reply(200, events)
                 elif Handler.bucket:
-                    self.reply(200, {"client": "aw-calendar-sync", "type": "calendar"})
+                    self.reply(200, {"client": "aw-watcher-calendars", "type": "calendar"})
                 else:
                     self.reply(404, {})
             def do_POST(self):

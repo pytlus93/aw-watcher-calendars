@@ -1,6 +1,6 @@
-use aw_calendar_sync::{parse_calendar, Config};
+use aw_watcher_calendars::{parse_calendar, Config};
 
-fn filtered_events(events: &str) -> Vec<aw_calendar_sync::CalendarEvent> {
+fn filtered_events(events: &str) -> Vec<aw_watcher_calendars::CalendarEvent> {
     let c = Config::default();
     let feed = format!("BEGIN:VCALENDAR\r\nVERSION:2.0\r\n{events}END:VCALENDAR\r\n");
     parse_calendar(

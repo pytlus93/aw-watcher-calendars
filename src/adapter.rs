@@ -58,7 +58,10 @@ pub fn load_feed(config: &Config) -> Result<String> {
     // Outlook published links work directly; redirects are rejected to keep bearer URLs private.
     let response = agent
         .get(url)
-        .set("User-Agent", "aw-calendar-sync/0.1.0")
+        .set(
+            "User-Agent",
+            concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION")),
+        )
         .set("Accept", "text/calendar")
         .call()
         .map_err(|e| http_error(e, "calendar download"))?;
@@ -96,7 +99,7 @@ impl AwAdapter {
             Ok(r) => json_response(r)?,
             Err(ureq::Error::Status(404, _)) => {
                 match self.agent.post(&self.url("")).send_json(json!({
-                    "client":"aw-calendar-sync", "type":"calendar",
+                    "client":"aw-watcher-calendars", "type":"calendar",
                     "hostname": std::env::var("COMPUTERNAME").unwrap_or_else(|_| "localhost".into())
                 })) {
                     Ok(r) if matches!(r.status(), 200 | 304) => (),
@@ -113,7 +116,7 @@ impl AwAdapter {
             }
             Err(e) => return Err(http_error(e, "read bucket metadata")),
         };
-        if metadata["client"] != "aw-calendar-sync" || metadata["type"] != "calendar" {
+        if metadata["client"] != "aw-watcher-calendars" || metadata["type"] != "calendar" {
             return Err("bucket belongs to another client or has a different type; choose a new calendar_id".into());
         }
         Ok(())

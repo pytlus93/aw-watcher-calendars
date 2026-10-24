@@ -1,6 +1,6 @@
-use aw_calendar_sync::{config::CalendarSet, parse_calendar, Config, PayloadMode, Window};
+use aw_watcher_calendars::{config::CalendarSet, parse_calendar, Config, PayloadMode, Window};
 
-fn events(config: &Config, summary: &str) -> Vec<aw_calendar_sync::CalendarEvent> {
+fn events(config: &Config, summary: &str) -> Vec<aw_watcher_calendars::CalendarEvent> {
     let text = format!("BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:synthetic-uid\r\nDTSTART:20261005T090000Z\r\nDTEND:20261005T100000Z\r\nSUMMARY:{summary}\r\nSTATUS:TENTATIVE\r\nATTENDEE:mailto:synthetic@example.invalid\r\nDESCRIPTION:Excluded message body\r\nLOCATION:Excluded location\r\nURL:https://example.invalid/private\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n");
     parse_calendar(
         &text,

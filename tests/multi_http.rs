@@ -1,4 +1,4 @@
-use aw_calendar_sync::{adapter::synchronize_all, config::CalendarSet};
+use aw_watcher_calendars::{adapter::synchronize_all, config::CalendarSet};
 use chrono::{Duration, Utc};
 use serde_json::{json, Value};
 use std::{
@@ -70,7 +70,7 @@ impl Server {
                 let (code, response) = match (method, parts.len()) {
                     ("GET", 5) => {
                         if state.buckets.contains_key(&bucket) {
-                            (200, json!({"client":"aw-calendar-sync","type":"calendar"}))
+                            (200, json!({"client":"aw-watcher-calendars","type":"calendar"}))
                         } else {
                             (404, json!({}))
                         }
@@ -162,7 +162,7 @@ fn overlapping_uids_reconciliation_failures_and_removed_sources_are_isolated() {
     assert_eq!(reports[0].result.as_ref().unwrap().deleted, 1);
     assert_eq!(reports[1].result.as_ref().unwrap().unchanged, 1);
     assert_eq!(
-        server.state.lock().unwrap().buckets["aw-calendar-sync_team"].len(),
+        server.state.lock().unwrap().buckets["aw-watcher-calendars_team"].len(),
         1
     );
     std::fs::write(&work, &content).unwrap();
@@ -174,7 +174,7 @@ fn overlapping_uids_reconciliation_failures_and_removed_sources_are_isolated() {
     assert!(reports[0].result.is_err());
     assert_eq!(reports[1].result.as_ref().unwrap().unchanged, 1);
     assert_eq!(
-        server.state.lock().unwrap().buckets["aw-calendar-sync_work"].len(),
+        server.state.lock().unwrap().buckets["aw-watcher-calendars_work"].len(),
         1
     );
     let only_team = CalendarSet::from_json(
@@ -190,7 +190,7 @@ fn overlapping_uids_reconciliation_failures_and_removed_sources_are_isolated() {
         r.result.unwrap();
     });
     assert_eq!(
-        server.state.lock().unwrap().buckets["aw-calendar-sync_work"].len(),
+        server.state.lock().unwrap().buckets["aw-watcher-calendars_work"].len(),
         1
     );
     std::fs::remove_file(work).unwrap();

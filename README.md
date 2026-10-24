@@ -1,4 +1,7 @@
-# ActivityWatch calendar sync
+# ActivityWatch calendars
+
+Release **1.0.0**. Repository, executable, AW module/client identity, settings/log
+directory and generated bucket prefix all use `aw-watcher-calendars`.
 
 An AW-managed Windows module that imports scheduled events from published Outlook HTTPS iCalendar feeds or local ICS files. Choose completed events, include ongoing meetings, or import the whole current day. Multiple calendars use separate buckets. Scheduled events are context, not proof of attendance or tracked work time.
 
@@ -11,7 +14,7 @@ No Microsoft Graph application or separate service is needed. Feed downloads con
 
 ## Install or upgrade
 
-Extract `aw-calendar-sync-0.1.0-windows-x64.zip`, close ActivityWatch normally and run from its `aw-calendar-sync` folder:
+Extract `aw-watcher-calendars-1.0.0-windows-x64.zip`, close ActivityWatch normally and run from its `aw-watcher-calendars` folder:
 
 ```powershell
 .\install.ps1 -ActivityWatchDirectory 'C:\path\to\activitywatch'
@@ -19,11 +22,21 @@ Extract `aw-calendar-sync-0.1.0-windows-x64.zip`, close ActivityWatch normally a
 
 From source use `./scripts/install.ps1`. The installer preserves settings and existing startup modules, backs up the tray configuration, and adds calendar sync to autostart. Use `-NoAutostart` to preserve the startup list. Keep the matching executable/actions sidecar together when upgrading or rolling back.
 
-Edit the config path printed by the installer, replacing the first calendar's placeholder URL with your direct private feed. Start ActivityWatch normally. **Modules → aw-calendar-sync** controls it; protocol 1 hosts also provide settings/status/log/about actions. See [tray actions](docs/module-actions.md).
+This is a full identity rename of the earlier development module. Existing
+installations and historical buckets are not migrated automatically; see
+[the rename procedure](docs/RENAMING.md) before installing alongside old files.
+
+Edit the config path printed by the installer, replacing the first calendar's placeholder URL with your direct private feed. Start ActivityWatch normally. **Modules → aw-watcher-calendars** controls it; protocol 1 hosts also provide settings/status/log/about actions. See [tray actions](docs/module-actions.md).
 
 ## Configuration and everyday use
 
-Default config: `%LOCALAPPDATA%\activitywatch\activitywatch\aw-calendar-sync\config.json`. Profiles use isolated roots. The module reloads settings before each check.
+Default config: `%LOCALAPPDATA%\activitywatch\activitywatch\aw-watcher-calendars\config.json`. Profiles use isolated roots. The module reloads settings before each check.
+
+`--testing` selects the separate testing configuration and port 5666. `--port <port>`
+accepts 1–65535 and overrides the port for all calendars and management actions,
+taking precedence over `--server-url`, action server context and saved endpoints.
+It retains the selected CLI/action loopback host; without one, it uses 127.0.0.1.
+The flag does not rewrite config files or infer testing mode from the port.
 
 | Setting | Default behavior |
 | --- | --- |
@@ -50,7 +63,7 @@ New templates use strict custom replay fields plus a readable title; this is not
 
 ## Troubleshooting
 
-- **Unconfigured or invalid settings:** the worker stays available and retries. Validate without network access using `aw-calendar-sync.exe --validate-config`.
+- **Unconfigured or invalid settings:** the worker stays available and retries. Validate without network access using `aw-watcher-calendars.exe --validate-config`.
 - **No imported events:** the default completed scope excludes future/ongoing events. Check scope, poll timing, lookback, timezone and status filters. Outages longer than seven days may leave older events unimported.
 - **Feed fails:** use a direct URL; redirects and unsupported recurrence/timezone forms are rejected before writes. Logs omit feed URLs and meeting text.
 - **No chart:** raw `calendar` events do not automatically add a dashboard page or become active work time.
@@ -71,6 +84,10 @@ python tests/transport.py
 ```
 
 [Validation](docs/validation.md) records parser, protocol, migration, isolated lifecycle and installed evidence. Real-host reboot recovery and interactive settings acceptance remain separate checks.
+
+The Windows x64 ZIP and `.sha256` sidecar are under `dist/`. See
+[release notes](CHANGELOG.md). The original repository URL redirects to
+[aw-watcher-calendars](https://github.com/pytlus93/aw-watcher-calendars).
 
 ## License
 
